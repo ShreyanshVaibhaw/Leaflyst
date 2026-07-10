@@ -1,6 +1,7 @@
-# Local-only planning documents - never push to GitHub
+# Local-only planning and explanation documents - never push to GitHub
 plan.md
 blueprint.md
+*explanation*.md
 
 # Environment / secrets
 .env
