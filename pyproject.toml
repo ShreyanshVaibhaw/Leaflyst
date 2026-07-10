@@ -1,0 +1,53 @@
+[project]
+name = "agentblackbox"
+version = "0.1.0"
+description = "AgentBlackBox monorepo root (workspace only, not a package)"
+requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = [
+    "apps/api",
+    "packages/schemas",
+    "packages/abx-sdk",
+    "packages/abx-tap",
+    "services/scanner",
+    "services/rules",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28",
+    "ruff>=0.14",
+    "mypy>=1.15",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "datamodel-code-generator[http]>=0.30",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+# Generated code is exempt; never hand-edit it anyway.
+exclude = ["packages/schemas/src/abx_schemas/generated/*"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+# datamodel-code-generator emits constr()/conint() annotations; valid with the pydantic plugin.
+disable_error_code = ["valid-type"]
+files = [
+    "packages/schemas/src",
+    "apps/api/src",
+]
+# Generated pydantic module is checked too; it must pass strict.
+
+[tool.pytest.ini_options]
+testpaths = ["apps", "packages", "services"]
+asyncio_mode = "auto"

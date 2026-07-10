@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentblackbox.dev/schemas/event.schema.json",
+  "title": "CanonicalEvent",
+  "description": "Every captured agent action, from any source, normalized into this shape before ingest. event_hash covers all fields except itself, including payload_digest but never the payload body (erasure-compatible chain).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "tenant_id",
+    "agent_id",
+    "session_id",
+    "seq",
+    "ts",
+    "source",
+    "event_type",
+    "operation",
+    "resource_refs",
+    "payload_digest",
+    "payload_truncated",
+    "redactions",
+    "prev_hash",
+    "event_hash"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUIDv7, assigned by the producer"
+    },
+    "tenant_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "agent_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Stable identifier for the configured agent"
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "One agent run"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Per-session monotonic sequence; gaps are detectable and surfaced"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 with millisecond precision"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["mcp_tap", "sdk_langgraph", "otel_ingest"],
+      "title": "Source"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "llm_call",
+        "tool_call",
+        "mcp_request",
+        "mcp_response",
+        "agent_step",
+        "http_call",
+        "file_op",
+        "db_op"
+      ],
+      "title": "EventType"
+    },
+    "operation": {
+      "type": "object",
+      "title": "Operation",
+      "additionalProperties": false,
+      "required": ["name", "outcome"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 512,
+          "description": "e.g. 'tools/call get-sum' or 'chat gpt-4o'"
+        },
+        "provider": {
+          "type": ["string", "null"],
+          "maxLength": 256,
+          "description": "gen_ai.provider.name or MCP server name",
+          "default": null
+        },
+        "target": {
+          "type": ["string", "null"],
+          "maxLength": 512,
+          "description": "Tool name, model name, or resource URI",
+          "default": null
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["success", "error", "denied", "unknown"],
+          "title": "Outcome"
+        },
+        "duration_ms": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "default": null
+        }
+      }
+    },
+    "credential_ref": {
+      "type": ["string", "null"],
+      "maxLength": 256,
+      "description": "Fingerprint reference into the identity graph; never a secret value",
+      "default": null
+    },
+    "resource_refs": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "string",
+        "maxLength": 1024,
+        "description": "Normalized resource identifier, e.g. aws:s3:bucket/key, gh:repo:org/name, file:/path"
+      }
+    },
+    "payload_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 of the redacted, truncated payload body"
+    },
+    "payload_ref": {
+      "type": ["string", "null"],
+      "maxLength": 512,
+      "description": "Pointer into the payload store; null once the body is deleted",
+      "default": null
+    },
+    "payload_truncated": {
+      "type": "boolean"
+    },
+    "redactions": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {
+        "type": "string",
+        "maxLength": 128,
+        "description": "Redaction rule id that fired"
+      }
+    },
+    "prev_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "event_hash of the previous event in this tenant's chain; sha256 of empty string for the genesis event"
+    },
+    "event_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "sha256 over the canonical JSON of all fields except event_hash"
+    }
+  }
+}

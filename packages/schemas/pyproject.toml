@@ -1,0 +1,13 @@
+[project]
+name = "abx-schemas"
+version = "0.1.0"
+description = "Canonical event schema and generated types. The contract between every component."
+requires-python = ">=3.12"
+dependencies = ["pydantic>=2.10"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/abx_schemas"]
