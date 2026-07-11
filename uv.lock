@@ -105,12 +105,6 @@ requires-dist = [{ name = "abx-schemas", editable = "packages/schemas" }]
 name = "abx-tap"
 version = "0.1.0"
 source = { editable = "packages/abx-tap" }
-dependencies = [
-    { name = "abx-schemas" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "abx-schemas", editable = "packages/schemas" }]
 
 [[package]]
 name = "agentblackbox"

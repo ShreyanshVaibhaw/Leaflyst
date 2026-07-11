@@ -3,13 +3,12 @@ name = "abx-tap"
 version = "0.1.0"
 description = "AgentBlackBox MCP tap: stdio proxy that records every MCP message"
 requires-python = ">=3.12"
-dependencies = ["abx-schemas"]
+# Zero runtime dependencies on purpose: the tap sits in the customer's agent
+# path and must be trivially installable and auditable. Stdlib only.
+dependencies = []
 
 [project.scripts]
 abx-tap = "abx_tap.cli:main"
-
-[tool.uv.sources]
-abx-schemas = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

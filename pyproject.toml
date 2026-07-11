@@ -42,6 +42,7 @@ strict = true
 plugins = ["pydantic.mypy"]
 files = [
     "packages/schemas/src",
+    "packages/abx-tap/src",
     "apps/api/src",
 ]
 # datamodel-code-generator emits constr()/conint() annotations; valid with the pydantic plugin.
