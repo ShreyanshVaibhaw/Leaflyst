@@ -40,14 +40,19 @@ exclude = ["packages/schemas/src/abx_schemas/generated/*"]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-# datamodel-code-generator emits constr()/conint() annotations; valid with the pydantic plugin.
-disable_error_code = ["valid-type"]
 files = [
     "packages/schemas/src",
     "apps/api/src",
 ]
-# Generated pydantic module is checked too; it must pass strict.
+# datamodel-code-generator emits constr()/conint() annotations; valid with the pydantic plugin.
+disable_error_code = ["valid-type"]
+
+[[tool.mypy.overrides]]
+module = ["boto3.*", "botocore.*", "clickhouse_connect.*", "psycopg_pool.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["apps", "packages", "services"]
 asyncio_mode = "auto"
+markers = ["load: throughput/performance checks, opt-in via -m load"]
+addopts = "-m 'not load'"

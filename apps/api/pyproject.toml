@@ -8,8 +8,10 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "abx-schemas",
     "psycopg[binary]>=3.2",
+    "psycopg-pool>=3.2",
     "clickhouse-connect>=0.8",
     "redis>=5.2",
+    "boto3>=1.35",
 ]
 
 [tool.uv.sources]

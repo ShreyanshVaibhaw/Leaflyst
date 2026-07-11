@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentblackbox.dev/schemas/ingest.schema.json",
+  "title": "IngestEvent",
+  "description": "The producer-facing event shape submitted by the MCP tap, SDK, or OTLP normalizer. The collector derives the canonical event from it: tenant_id comes from the ingest token (never the body), payload is redacted/truncated/digested server-side, and chain fields are computed at ingest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "agent_id",
+    "session_id",
+    "seq",
+    "ts",
+    "source",
+    "event_type",
+    "operation",
+    "resource_refs"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUIDv7, assigned by the producer"
+    },
+    "agent_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["mcp_tap", "sdk_langgraph", "otel_ingest"],
+      "title": "IngestSource"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "llm_call",
+        "tool_call",
+        "mcp_request",
+        "mcp_response",
+        "agent_step",
+        "http_call",
+        "file_op",
+        "db_op"
+      ],
+      "title": "IngestEventType"
+    },
+    "operation": {
+      "type": "object",
+      "title": "IngestOperation",
+      "additionalProperties": false,
+      "required": ["name", "outcome"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "provider": {
+          "type": ["string", "null"],
+          "maxLength": 256,
+          "default": null
+        },
+        "target": {
+          "type": ["string", "null"],
+          "maxLength": 512,
+          "default": null
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["success", "error", "denied", "unknown"],
+          "title": "IngestOutcome"
+        },
+        "duration_ms": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "default": null
+        }
+      }
+    },
+    "credential_ref": {
+      "type": ["string", "null"],
+      "maxLength": 256,
+      "description": "Fingerprint reference; never a secret value",
+      "default": null
+    },
+    "resource_refs": {
+      "type": "array",
+      "maxItems": 1024,
+      "items": {
+        "type": "string",
+        "maxLength": 1024
+      }
+    },
+    "payload": {
+      "type": ["string", "null"],
+      "maxLength": 1048576,
+      "description": "Raw captured content. Redacted, truncated, digested, and split from the event server-side. Producers should pre-redact as defense in depth.",
+      "default": null
+    }
+  }
+}

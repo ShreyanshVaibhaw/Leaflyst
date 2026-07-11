@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS abx.events
     redactions        Array(String),
     prev_hash         FixedString(64),
     event_hash        FixedString(64),
+    -- Per-tenant chain position assigned at ingest; storage metadata, not part
+    -- of the hashed event. Verification walks the chain in this order.
+    chain_seq         UInt64,
     ingested_at       DateTime64(3, 'UTC') DEFAULT now64(3)
 )
 ENGINE = MergeTree
