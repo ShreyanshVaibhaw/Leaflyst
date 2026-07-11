@@ -68,7 +68,7 @@ export interface Operation {
    */
   name: string;
   /**
-   * gen_ai.provider.name or MCP server name
+   * Normalized provider or MCP server name
    */
   provider?: string | null;
   /**

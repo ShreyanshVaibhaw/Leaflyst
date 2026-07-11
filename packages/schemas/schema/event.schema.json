@@ -87,7 +87,7 @@
         "provider": {
           "type": ["string", "null"],
           "maxLength": 256,
-          "description": "gen_ai.provider.name or MCP server name",
+          "description": "Normalized provider or MCP server name",
           "default": null
         },
         "target": {

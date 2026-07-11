@@ -47,6 +47,21 @@ def tenant() -> Iterator[tuple[str, str]]:
         conn.commit()
     yield tenant_id, token
     with psycopg.connect(settings.pg_dsn) as conn:
+        conn.execute(
+            "DELETE FROM permission_reaches_resource WHERE permission_id IN "
+            "(SELECT id FROM permissions WHERE tenant_id = %s)", (tenant_id,)
+        )
+        conn.execute(
+            "DELETE FROM agent_holds_credential WHERE credential_id IN "
+            "(SELECT id FROM credentials WHERE tenant_id = %s)", (tenant_id,)
+        )
+        for table in (
+            "findings", "permissions", "resources", "integration_connections",
+            "credentials", "principals", "agents", "scan_runs",
+        ):
+            conn.execute(
+                f"DELETE FROM {table} WHERE tenant_id = %s", (tenant_id,)  # noqa: S608
+            )
         for table in ("metering_daily", "ingest_tokens", "chain_heads"):
             conn.execute(f"DELETE FROM {table} WHERE tenant_id = %s", (tenant_id,))  # noqa: S608
         conn.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))

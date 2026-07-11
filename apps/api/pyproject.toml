@@ -13,6 +13,8 @@ dependencies = [
     "clickhouse-connect>=0.8",
     "redis>=5.2",
     "boto3>=1.35",
+    "opentelemetry-proto>=1.42,<2",
+    "protobuf>=6.31,<8",
 ]
 
 [tool.uv.sources]

@@ -3,7 +3,13 @@ name = "abx-sdk"
 version = "0.1.0"
 description = "AgentBlackBox Python SDK: LangGraph instrumentor emitting OTel GenAI spans"
 requires-python = ">=3.12"
-dependencies = ["abx-schemas"]
+dependencies = [
+    "abx-schemas",
+    "langchain-core>=1.2,<2",
+    "opentelemetry-api>=1.42,<2",
+    "opentelemetry-sdk>=1.42,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.42,<2",
+]
 
 [tool.uv.sources]
 abx-schemas = { workspace = true }
@@ -13,4 +19,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/abx_sdk"]
+packages = ["src/abx", "src/abx_sdk"]

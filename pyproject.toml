@@ -21,10 +21,12 @@ package = false
 dev = [
     "httpx>=0.28",
     "moto[iam,sts]>=5.0",
+    "langgraph>=1.0,<2",
     "ruff>=0.14",
     "mypy>=1.15",
     "pytest>=8.3",
     "pytest-asyncio>=0.25",
+    "types-protobuf>=6.30",
     "datamodel-code-generator[http]>=0.30",
 ]
 
@@ -44,6 +46,7 @@ plugins = ["pydantic.mypy"]
 files = [
     "packages/schemas/src",
     "packages/abx-tap/src",
+    "packages/abx-sdk/src",
     "apps/api/src",
     "services/scanner/src",
 ]

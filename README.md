@@ -45,3 +45,22 @@ For the GitHub App connection flow, set `ABX_GITHUB_APP_SLUG`,
 `<API URL>/v1/integrations/github/setup`, then run the scanner worker with
 `uv run abx-scanner-worker`. Provider secrets stay in the API/worker
 environment; PostgreSQL stores installation identifiers only.
+
+## Python SDK and OTLP
+
+LangGraph uses the standard callback configuration:
+
+```python
+from abx import instrument
+callback = instrument(agent_id="billing-bot")
+result = graph.invoke(inputs, {"callbacks": [callback]})
+```
+
+Set `ABX_INGEST_TOKEN` and optionally `ABX_OTLP_ENDPOINT` (default:
+`http://localhost:8000/v1/otlp/traces`). Message content is disabled by
+default; opt in with `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true`.
+Call `callback.shutdown()` during application shutdown to flush buffered spans.
+
+Existing OTLP exporters can send protobuf traces to `/v1/otlp/traces` with the
+write-only ingest token in the `Authorization: Bearer ...` header. Current and
+legacy OTel GenAI, OpenLLMetry, and OpenInference attributes are normalized.

@@ -45,7 +45,7 @@ class Operation(BaseModel):
     ]
     provider: Annotated[
         str | None,
-        Field(description='gen_ai.provider.name or MCP server name', max_length=256),
+        Field(description='Normalized provider or MCP server name', max_length=256),
     ] = None
     target: Annotated[
         str | None,
