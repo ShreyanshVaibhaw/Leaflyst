@@ -1,0 +1,42 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  AgentBlackBox read-only credential scanner role. Grants the scanner
+  cross-account READ access only (SecurityAudit + ViewOnlyAccess). Revocation
+  uses a separate role you create explicitly; this one can never write.
+
+Parameters:
+  ScannerAccountId:
+    Type: String
+    Description: The AgentBlackBox AWS account allowed to assume this role.
+  ExternalId:
+    Type: String
+    Description: >-
+      Per-tenant unguessable id shown in your AgentBlackBox connect screen.
+      Prevents the confused-deputy problem; the scanner must present it to
+      assume this role.
+    NoEcho: true
+
+Resources:
+  ScannerReadOnlyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AgentBlackBoxScannerReadOnly
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${ScannerAccountId}:root"
+            Action: "sts:AssumeRole"
+            Condition:
+              StringEquals:
+                "sts:ExternalId": !Ref ExternalId
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/SecurityAudit
+        - arn:aws:iam::aws:policy/job-function/ViewOnlyAccess
+      # No inline write permissions. This role is read-only by construction.
+
+Outputs:
+  RoleArn:
+    Description: Paste this ARN into the AgentBlackBox connect screen.
+    Value: !GetAtt ScannerReadOnlyRole.Arn

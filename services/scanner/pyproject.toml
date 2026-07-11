@@ -3,7 +3,12 @@ name = "abx-scanner"
 version = "0.1.0"
 description = "AgentBlackBox credential scanner workers (AWS, GitHub)"
 requires-python = ">=3.12"
-dependencies = ["abx-schemas", "psycopg[binary]>=3.2", "redis>=5.2"]
+dependencies = [
+    "abx-schemas",
+    "psycopg[binary]>=3.2",
+    "redis>=5.2",
+    "boto3>=1.35",
+]
 
 [tool.uv.sources]
 abx-schemas = { workspace = true }

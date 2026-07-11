@@ -20,6 +20,7 @@ package = false
 [dependency-groups]
 dev = [
     "httpx>=0.28",
+    "moto[iam,sts]>=5.0",
     "ruff>=0.14",
     "mypy>=1.15",
     "pytest>=8.3",
@@ -44,12 +45,13 @@ files = [
     "packages/schemas/src",
     "packages/abx-tap/src",
     "apps/api/src",
+    "services/scanner/src",
 ]
 # datamodel-code-generator emits constr()/conint() annotations; valid with the pydantic plugin.
 disable_error_code = ["valid-type"]
 
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*", "clickhouse_connect.*", "psycopg_pool.*"]
+module = ["boto3.*", "botocore.*", "clickhouse_connect.*", "psycopg_pool.*", "moto.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
