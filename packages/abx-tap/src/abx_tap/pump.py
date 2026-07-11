@@ -20,6 +20,7 @@ threads are simple and portable.
 
 from __future__ import annotations
 
+import contextlib
 import queue
 import shutil
 import subprocess
@@ -62,10 +63,9 @@ def run_pump(
     child_in, child_out, child_err = child.stdin, child.stdout, child.stderr
 
     def _observe(direction: str, raw: bytes) -> None:
-        try:
+        # Backpressure guard: full queue -> drop the observation, never block.
+        with contextlib.suppress(queue.Full):
             observe.put_nowait(ObservedLine(direction, raw))
-        except queue.Full:  # pragma: no cover - backpressure guard
-            pass
 
     def pump_in() -> None:
         """our stdin -> child stdin (client -> server)."""
@@ -77,10 +77,8 @@ def run_pump(
         except (BrokenPipeError, OSError):
             pass
         finally:
-            try:
+            with contextlib.suppress(OSError):
                 child_in.close()
-            except OSError:
-                pass
 
     def pump_out() -> None:
         """child stdout -> our stdout (server -> client)."""
