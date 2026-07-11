@@ -99,6 +99,7 @@ async def otlp_traces(
 
     events = normalize_export(export_request)
     if events:
+        events = allocate_session_sequences(tenant_id, events)
         ingest(IngestBatch(events=events), tenant_id)
         try:
             link_observed_credentials(tenant_id, events)
@@ -126,10 +127,17 @@ def normalize_export(request: ExportTraceServiceRequest) -> list[IngestEvent]:
                     )
                 )
     normalized.sort(key=lambda item: (item.span.start_time_unix_nano, item.span.span_id))
-    return [_to_ingest_event(item, offset) for offset, item in enumerate(normalized)]
+    events = [_to_ingest_event(item) for item in normalized]
+    counters: dict[str, int] = {}
+    sequenced: list[IngestEvent] = []
+    for event in events:
+        seq = counters.get(event.session_id, 0)
+        counters[event.session_id] = seq + 1
+        sequenced.append(event.model_copy(update={"seq": seq}))
+    return sequenced
 
 
-def _to_ingest_event(item: NormalizedSpan, offset: int) -> IngestEvent:
+def _to_ingest_event(item: NormalizedSpan) -> IngestEvent:
     span, attrs = item.span, item.attributes
     operation = _operation(attrs, span.name)
     provider = _clean(
@@ -173,7 +181,7 @@ def _to_ingest_event(item: NormalizedSpan, offset: int) -> IngestEvent:
             "event_id": str(uuid.uuid4()),
             "agent_id": agent_id[:256],
             "session_id": _clean(attrs.get(GEN_AI_CONVERSATION_ID) or trace_id)[:256],
-            "seq": start_ns + offset,
+            "seq": 0,
             "ts": timestamp,
             "source": (
                 "sdk_langgraph"
@@ -193,6 +201,38 @@ def _to_ingest_event(item: NormalizedSpan, offset: int) -> IngestEvent:
             "payload": payload,
         }
     )
+
+
+def allocate_session_sequences(
+    tenant_id: str, events: list[IngestEvent]
+) -> list[IngestEvent]:
+    """Allocate contiguous sequence numbers across concurrent OTLP batches."""
+    grouped: dict[str, list[int]] = {}
+    for index, event in enumerate(events):
+        grouped.setdefault(event.session_id, []).append(index)
+    allocated = list(events)
+    with pg_pool().connection() as conn:
+        for session_id, indexes in grouped.items():
+            conn.execute(
+                "INSERT INTO session_sequences (tenant_id, session_id, next_seq) "
+                "VALUES (%s, %s, 0) ON CONFLICT (tenant_id, session_id) DO NOTHING",
+                (tenant_id, session_id),
+            )
+            row = conn.execute(
+                "SELECT next_seq FROM session_sequences "
+                "WHERE tenant_id = %s AND session_id = %s FOR UPDATE",
+                (tenant_id, session_id),
+            ).fetchone()
+            assert row is not None
+            start = int(row[0])
+            for offset, index in enumerate(indexes):
+                allocated[index] = events[index].model_copy(update={"seq": start + offset})
+            conn.execute(
+                "UPDATE session_sequences SET next_seq = %s "
+                "WHERE tenant_id = %s AND session_id = %s",
+                (start + len(indexes), tenant_id, session_id),
+            )
+    return allocated
 
 
 def _operation(attrs: dict[str, Any], span_name: str) -> str:

@@ -5,6 +5,7 @@ from abx_api.dashboard import router as dashboard_router
 from abx_api.ingest import router as ingest_router
 from abx_api.integrations import router as integrations_router
 from abx_api.normalize import router as normalize_router
+from abx_api.replay import router as replay_router
 from abx_api.settings import settings
 from abx_api.verify import router as verify_router
 
@@ -20,6 +21,7 @@ app.include_router(verify_router)
 app.include_router(dashboard_router)
 app.include_router(integrations_router)
 app.include_router(normalize_router)
+app.include_router(replay_router)
 
 
 @app.get("/healthz")

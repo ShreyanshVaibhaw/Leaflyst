@@ -4,6 +4,7 @@ const nav = [
   ["Overview", "/"],
   ["Findings", "/findings"],
   ["Credentials", "/credentials"],
+  ["Agents", "/agents"],
   ["Integrations", "/integrations"],
 ] as const;
 

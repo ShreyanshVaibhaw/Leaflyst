@@ -35,6 +35,12 @@ def verify(
     from_chain_seq: Annotated[int, "start of range"] = 1,
     to_chain_seq: int | None = None,
 ) -> VerifyResult:
+    return verify_tenant_chain(tenant_id, from_chain_seq, to_chain_seq)
+
+
+def verify_tenant_chain(
+    tenant_id: str, from_chain_seq: int = 1, to_chain_seq: int | None = None
+) -> VerifyResult:
     where = "tenant_id = %(t)s AND chain_seq >= %(lo)s"
     params: dict[str, object] = {"t": tenant_id, "lo": from_chain_seq}
     if to_chain_seq is not None:
