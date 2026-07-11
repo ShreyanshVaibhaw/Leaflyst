@@ -27,3 +27,21 @@ uv run python packages/schemas/scripts/codegen.py   # regenerate types after sch
 uv run pytest
 uv run ruff check . && uv run mypy
 ```
+
+## Phase 4 dashboard
+
+The server-rendered dashboard reads data without exposing the API admin key to
+the browser:
+
+```text
+ABX_TENANT_ID=<tenant UUID>
+ABX_API_URL=http://localhost:8000
+ABX_ADMIN_KEY=dev-admin-key
+```
+
+For the GitHub App connection flow, set `ABX_GITHUB_APP_SLUG`,
+`ABX_GITHUB_APP_ID`, `ABX_GITHUB_PRIVATE_KEY`, and a production
+`ABX_GITHUB_STATE_SECRET`. Configure the App setup URL as
+`<API URL>/v1/integrations/github/setup`, then run the scanner worker with
+`uv run abx-scanner-worker`. Provider secrets stay in the API/worker
+environment; PostgreSQL stores installation identifiers only.

@@ -7,6 +7,7 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "abx-schemas",
+    "abx-scanner",
     "psycopg[binary]>=3.2",
     "psycopg-pool>=3.2",
     "clickhouse-connect>=0.8",
@@ -16,6 +17,7 @@ dependencies = [
 
 [tool.uv.sources]
 abx-schemas = { workspace = true }
+abx-scanner = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

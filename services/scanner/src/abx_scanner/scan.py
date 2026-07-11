@@ -16,8 +16,9 @@ from dataclasses import dataclass
 import boto3
 import psycopg
 
-from abx_scanner import aws, findings, graph
+from abx_scanner import aws, findings, github, graph
 from abx_scanner.db import connect_raw
+from abx_scanner.gh_client import GitHubClient
 
 
 @dataclass
@@ -62,11 +63,45 @@ def run_aws_scan(
             conn.close()
 
 
-def _start_scan_run(conn: psycopg.Connection, tenant_id: str) -> str:
+def run_github_scan(
+    tenant_id: str,
+    org: str,
+    client: GitHubClient,
+    conn: psycopg.Connection | None = None,
+) -> ScanSummary:
+    owns_conn = conn is None
+    conn = conn or connect_raw()
+    try:
+        scan_run_id = _start_scan_run(conn, tenant_id, "github", org)
+        try:
+            result = github.enumerate_org(client, org)
+            graph.persist_github(conn, tenant_id, result)
+            fs = findings.compute_github_findings(conn, tenant_id)
+            findings.persist_findings(conn, tenant_id, fs)
+            _finish_scan_run(conn, scan_run_id, result.api_calls, "succeeded")
+            return ScanSummary(
+                scan_run_id=scan_run_id,
+                account_id=org,
+                principals=len({c.owner_login for c in result.credentials}),
+                credentials=len(result.credentials),
+                findings=len(fs),
+                api_calls=result.api_calls,
+            )
+        except Exception:
+            _finish_scan_run(conn, scan_run_id, 0, "failed")
+            raise
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def _start_scan_run(
+    conn: psycopg.Connection, tenant_id: str, provider: str = "aws", scope: str = "account"
+) -> str:
     row = conn.execute(
         "INSERT INTO scan_runs (tenant_id, provider, scope, status) "
-        "VALUES (%s, 'aws', 'account', 'running') RETURNING id",
-        (tenant_id,),
+        "VALUES (%s, %s, %s, 'running') RETURNING id",
+        (tenant_id, provider, scope),
     ).fetchone()
     assert row is not None
     conn.commit()

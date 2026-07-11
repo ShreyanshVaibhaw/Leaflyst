@@ -39,6 +39,21 @@ class Settings:
         default_factory=lambda: int(_env("ABX_PAYLOAD_MAX_BYTES", str(32 * 1024)))
     )
     max_batch_events: int = field(default_factory=lambda: int(_env("ABX_MAX_BATCH", "5000")))
+    cors_origins: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            _env("ABX_CORS_ORIGINS", "http://localhost:3000").split(",")
+        )
+    )
+    redis_url: str = field(default_factory=lambda: _env("ABX_REDIS_URL", "redis://localhost:6379"))
+    web_url: str = field(default_factory=lambda: _env("ABX_WEB_URL", "http://localhost:3000"))
+    github_app_slug: str = field(default_factory=lambda: _env("ABX_GITHUB_APP_SLUG", ""))
+    github_app_id: str = field(default_factory=lambda: _env("ABX_GITHUB_APP_ID", ""))
+    github_private_key: str = field(
+        default_factory=lambda: _env("ABX_GITHUB_PRIVATE_KEY", "").replace("\\n", "\n")
+    )
+    github_state_secret: str = field(
+        default_factory=lambda: _env("ABX_GITHUB_STATE_SECRET", "dev-github-state-secret")
+    )
 
 
 settings = Settings()

@@ -60,6 +60,90 @@ def compute_findings(conn: psycopg.Connection, tenant_id: str) -> list[Finding]:
     return findings
 
 
+def compute_github_findings(conn: psycopg.Connection, tenant_id: str) -> list[Finding]:
+    findings: list[Finding] = []
+    creds = conn.execute(
+        "SELECT c.id, c.fingerprint, c.kind, c.last_used_at, c.created_at_provider, "
+        "p.external_id, p.id "
+        "FROM credentials c JOIN principals p ON c.owner_principal = p.id "
+        "WHERE c.tenant_id = %s AND c.provider = 'github'",
+        (tenant_id,),
+    ).fetchall()
+
+    now = _now()
+    for cred_id, fp, kind, last_used, created, owner, _principal_id in creds:
+        reach = _blast_radius_for_credential(conn, str(cred_id))
+        findings.extend(
+            _github_rules(str(cred_id), fp, kind, last_used, created, str(owner), reach, now)
+        )
+    return findings
+
+
+def _github_rules(
+    cred_id: str,
+    fingerprint: str,
+    kind: str,
+    last_used: datetime | None,
+    created: datetime | None,
+    owner: str,
+    reach: dict[str, Any],
+    now: datetime,
+) -> list[Finding]:
+    out: list[Finding] = []
+    unused_days = (now - last_used).days if last_used else None
+    never_used = last_used is None
+    label = kind.replace("_", " ")
+
+    if never_used or (unused_days is not None and unused_days > ORPHAN_DAYS):
+        out.append(Finding(
+            "orphaned_credential",
+            f"github:orphaned:{fingerprint}",
+            "high" if reach["destructive"] else "medium",
+            cred_id,
+            {"fingerprint": fingerprint, "owner": owner, "kind": kind,
+             "last_used_days_ago": unused_days, "never_used": never_used,
+             "reach_count": reach["count"]},
+            f"Remove the unused {label} owned by {owner} if no longer needed.",
+        ))
+
+    # Over-privileged: admin scope, or write access to repositories.
+    has_admin = any(a == "admin" for a in reach["access_levels"])
+    has_write = any(a == "write" for a in reach["access_levels"])
+    if has_admin or has_write:
+        out.append(Finding(
+            "over_privileged",
+            f"github:overpriv:{fingerprint}",
+            "critical" if has_admin else "high",
+            cred_id,
+            {"fingerprint": fingerprint, "owner": owner, "kind": kind,
+             "scopes": reach["scopes"][:20], "reachable_repos": reach["resources"][:20],
+             "reach_count": reach["count"]},
+            f"Scope this {label} to read-only or the minimum repositories it needs.",
+        ))
+
+    if created is not None and (now - created).days > STALE_ROTATION_DAYS:
+        out.append(Finding(
+            "stale_authorization",
+            f"github:stale:{fingerprint}",
+            "medium",
+            cred_id,
+            {"fingerprint": fingerprint, "owner": owner, "kind": kind,
+             "age_days": (now - created).days},
+            f"Rotate this {label}; it is over {STALE_ROTATION_DAYS} days old.",
+        ))
+
+    out.append(Finding(
+        "blast_radius",
+        f"github:blast:{fingerprint}",
+        "info",
+        cred_id,
+        {"fingerprint": fingerprint, "owner": owner, "kind": kind,
+         "reach_count": reach["count"], "resources": reach["resources"][:50]},
+        "Review what this credential can reach if compromised.",
+    ))
+    return out
+
+
 def _rules_for_credential(
     cred_id: str,
     fingerprint: str,
@@ -164,6 +248,35 @@ def _blast_radius(conn: psycopg.Connection, principal_id: str) -> dict[str, Any]
         "destructive_actions": destructive_actions,
         "admin_wildcard": admin_wildcard,
         "hits_prod_or_wildcard": hits_prod_or_wildcard,
+        # Provider-neutral views used by the GitHub rules.
+        "access_levels": sorted({r[2] for r in rows}),
+        "scopes": sorted({r[3] for r in rows}),
+    }
+
+
+def _blast_radius_for_credential(
+    conn: psycopg.Connection, credential_id: str
+) -> dict[str, Any]:
+    """Provider permissions attached to one credential, never its owner's peers."""
+    rows = conn.execute(
+        "SELECT DISTINCT r.identifier, r.environment, prr.access, p.scope "
+        "FROM permissions p "
+        "JOIN permission_reaches_resource prr ON prr.permission_id = p.id "
+        "JOIN resources r ON r.id = prr.resource_id "
+        "WHERE p.credential_id = %s",
+        (credential_id,),
+    ).fetchall()
+    resources = sorted({r[0] for r in rows})
+    destructive_actions = sorted({r[3] for r in rows if r[2] in ("write", "admin")})
+    return {
+        "count": len(resources),
+        "resources": resources,
+        "destructive": bool(destructive_actions),
+        "destructive_actions": destructive_actions,
+        "admin_wildcard": False,
+        "hits_prod_or_wildcard": False,
+        "access_levels": sorted({r[2] for r in rows}),
+        "scopes": sorted({r[3] for r in rows}),
     }
 
 

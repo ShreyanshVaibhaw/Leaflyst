@@ -8,7 +8,12 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "redis>=5.2",
     "boto3>=1.35",
+    # GitHub App JWT auth (RS256). GitHub REST calls themselves use stdlib urllib.
+    "pyjwt[crypto]>=2.10",
 ]
+
+[project.scripts]
+abx-scanner-worker = "abx_scanner.worker:main"
 
 [tool.uv.sources]
 abx-schemas = { workspace = true }
