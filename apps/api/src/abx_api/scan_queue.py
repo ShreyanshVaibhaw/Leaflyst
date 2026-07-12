@@ -14,7 +14,12 @@ SCAN_STREAM = "abx:scan_jobs"
 
 @lru_cache(maxsize=1)
 def redis_client() -> Any:
-    return redis.Redis.from_url(settings.redis_url, decode_responses=True)
+    return redis.Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+    )
 
 
 def enqueue_github_scan(tenant_id: str, installation_id: str, org: str) -> str:

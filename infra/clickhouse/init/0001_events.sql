@@ -34,8 +34,5 @@ ENGINE = MergeTree
 PARTITION BY toYYYYMM(ts)
 ORDER BY (tenant_id, session_id, seq);
 
--- Application user: INSERT and SELECT only. No ALTER, no UPDATE/DELETE
--- (ClickHouse mutations are ALTER TABLE ... UPDATE/DELETE, so denying ALTER
--- denies mutation). This is the append-only guarantee at the grant level.
-CREATE USER IF NOT EXISTS abx_app IDENTIFIED WITH sha256_password BY 'abx_app_dev_password';
-GRANT INSERT, SELECT ON abx.events TO abx_app;
+-- The application user and its INSERT + SELECT grants are supplied by
+-- users.d/abx_app.xml so credentials remain runtime configuration.

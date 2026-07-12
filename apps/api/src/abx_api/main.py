@@ -8,6 +8,7 @@ from abx_api.body_limit import ScanUploadBodyLimit
 from abx_api.dashboard import router as dashboard_router
 from abx_api.demo import router as demo_router
 from abx_api.evidence import router as evidence_router
+from abx_api.health import router as health_router
 from abx_api.ingest import router as ingest_router
 from abx_api.integrations import router as integrations_router
 from abx_api.local_scan import router as local_scan_router
@@ -48,8 +49,4 @@ app.include_router(local_scan_router)
 app.include_router(onboarding_router)
 app.include_router(evidence_router)
 app.include_router(tenant_settings_router)
-
-
-@app.get("/healthz")
-def healthz() -> dict[str, str]:
-    return {"status": "ok"}
+app.include_router(health_router)

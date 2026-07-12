@@ -24,12 +24,14 @@ services:
       CLICKHOUSE_USER: abx_admin
       CLICKHOUSE_PASSWORD: abx_dev_password
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+      ABX_CH_APP_PASSWORD: abx_app_dev_password
     ports:
       - "8123:8123"
       - "9000:9000"
     volumes:
       - ch_data:/var/lib/clickhouse
       - ./clickhouse/init:/docker-entrypoint-initdb.d:ro
+      - ./clickhouse/users.d/abx_app.xml:/etc/clickhouse-server/users.d/abx_app.xml:ro
     ulimits:
       nofile:
         soft: 262144

@@ -55,12 +55,17 @@ def run_worker(client: Any | None = None, *, once: bool = False) -> int:
     consumer = f"{socket.gethostname()}-{os.getpid()}"
     completed = 0
     while True:
-        messages = cast(
-            list[tuple[str, list[tuple[str, dict[str, str]]]]],
-            stream_client.xreadgroup(
-                GROUP, consumer, {STREAM: ">"}, count=1, block=1000 if once else 5000
-            ),
-        )
+        try:
+            messages = cast(
+                list[tuple[str, list[tuple[str, dict[str, str]]]]],
+                stream_client.xreadgroup(
+                    GROUP, consumer, {STREAM: ">"}, count=1, block=1000 if once else 5000
+                ),
+            )
+        except redis.TimeoutError:
+            if once:
+                return completed
+            continue
         if not messages:
             if once:
                 return completed

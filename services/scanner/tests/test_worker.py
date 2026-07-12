@@ -55,3 +55,11 @@ def test_worker_dead_letters_failed_job(monkeypatch) -> None:
     assert worker.run_worker(client, once=True) == 0
     assert client.acked == ["1-0"]
     assert client.failed[0]["error"] == "scan failed"
+
+
+def test_worker_treats_idle_timeout_as_empty_poll() -> None:
+    client = FakeRedis(JOB)
+    client.xreadgroup = lambda *_args, **_kwargs: (_ for _ in ()).throw(  # type: ignore[method-assign]
+        worker.redis.TimeoutError("idle")
+    )
+    assert worker.run_worker(client, once=True) == 0

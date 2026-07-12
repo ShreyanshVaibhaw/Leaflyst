@@ -29,6 +29,23 @@ uv run pytest
 uv run ruff check . && uv run mypy
 ```
 
+## Release images
+
+The API, migration runner, scanner worker, and alert worker share one locked,
+non-root Python image. The standalone Next.js image includes the matching
+Playwright Chromium runtime used for incident-report PDFs:
+
+```text
+docker build -f infra/docker/python.Dockerfile -t agentblackbox-python:local .
+docker build -f infra/docker/web.Dockerfile -t agentblackbox-web:local .
+uv run python demo/container_smoke.py
+```
+
+The smoke check rejects root images and configured secrets, then verifies both
+container health checks, the public security page, and the packaged Chromium
+binary. Runtime credentials must be injected by the deployment platform. See
+[`docs/deployment.md`](docs/deployment.md) for the one-command release topology.
+
 ## Dashboard and onboarding
 
 The server-rendered dashboard reads data without exposing the API admin key to

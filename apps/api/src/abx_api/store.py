@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import boto3
 import clickhouse_connect
+from botocore.config import Config
 from psycopg_pool import ConnectionPool
 
 from abx_api.settings import settings
@@ -47,6 +48,7 @@ def s3_client() -> Any:
         aws_access_key_id=settings.s3_access_key,
         aws_secret_access_key=settings.s3_secret_key,
         region_name="us-east-1",
+        config=Config(connect_timeout=2, read_timeout=2, retries={"max_attempts": 1}),
     )
 
 
