@@ -14,6 +14,7 @@ services/scanner   Credential scanner workers (AWS, GitHub)
 services/rules     Anomaly rule engine + alerts
 infra              docker compose, migrations, DDL
 demo               End-to-end demo scenario
+tools/abx_verify.py Standalone standard-library evidence verifier
 ```
 
 ## Development
@@ -28,16 +29,21 @@ uv run pytest
 uv run ruff check . && uv run mypy
 ```
 
-## Phase 4 dashboard
+## Dashboard and onboarding
 
 The server-rendered dashboard reads data without exposing the API admin key to
 the browser:
 
 ```text
-ABX_TENANT_ID=<tenant UUID>
 ABX_API_URL=http://localhost:8000
 ABX_ADMIN_KEY=dev-admin-key
 ```
+
+Open `/onboarding` to create a workspace and receive a write-only ingest token.
+`ABX_TENANT_ID` remains available as a local-development fallback. See
+[`docs/onboarding.md`](docs/onboarding.md) for the cold-start and production
+path and [`docs/integrations.md`](docs/integrations.md) for tap, SDK, OTLP,
+AWS, local-scanner, and GitHub setup.
 
 For the GitHub App connection flow, set `ABX_GITHUB_APP_SLUG`,
 `ABX_GITHUB_APP_ID`, `ABX_GITHUB_PRIVATE_KEY`, and a production

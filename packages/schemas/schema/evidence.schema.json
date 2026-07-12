@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentblackbox.dev/schemas/evidence.schema.json",
+  "title": "EvidenceRecord",
+  "description": "One record in a stream-verifiable abx-evidence-v1 NDJSON export.",
+  "oneOf": [
+    { "$ref": "#/$defs/EvidenceHeader" },
+    { "$ref": "#/$defs/EvidenceEvent" },
+    { "$ref": "#/$defs/EvidenceFooter" }
+  ],
+  "$defs": {
+    "EvidenceHeader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "format", "tenant_id", "exported_at"],
+      "properties": {
+        "type": { "const": "header", "type": "string" },
+        "format": { "const": "abx-evidence-v1", "type": "string" },
+        "tenant_id": { "type": "string", "format": "uuid" },
+        "exported_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "EvidenceEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "chain_seq", "event"],
+      "properties": {
+        "type": { "const": "event", "type": "string" },
+        "chain_seq": { "type": "integer", "minimum": 1 },
+        "event": { "$ref": "event.schema.json" }
+      }
+    },
+    "Checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head_hash", "head_seq"],
+      "properties": {
+        "head_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "head_seq": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "Anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "tenant_id", "head_hash", "head_seq", "anchored_at"],
+      "properties": {
+        "ref": { "type": "string", "maxLength": 2048 },
+        "tenant_id": { "type": "string", "format": "uuid" },
+        "head_hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "head_seq": { "type": "integer", "minimum": 1 },
+        "anchored_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "EvidenceFooter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "checkpoint", "anchor"],
+      "properties": {
+        "type": { "const": "footer", "type": "string" },
+        "checkpoint": { "$ref": "#/$defs/Checkpoint" },
+        "anchor": { "$ref": "#/$defs/Anchor" }
+      }
+    }
+  }
+}

@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 abx-scanner-worker = "abx_scanner.worker:main"
+abx-scanner-local = "abx_scanner.local:main"
 
 [tool.uv.sources]
 abx-schemas = { workspace = true }

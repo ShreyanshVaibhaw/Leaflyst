@@ -27,5 +27,5 @@ export function EmptyState({ title, body, href, label }: { title: string; body: 
 }
 
 export function ErrorState({ message }: { message: string }) {
-  return <Panel className="border-amber-200 bg-amber-50 p-6"><p className="font-semibold text-amber-950">Dashboard data is unavailable</p><p className="mt-1 text-sm text-amber-800">{message}</p><p className="mt-3 font-mono text-xs text-amber-700">Set ABX_TENANT_ID and ensure the API is running.</p></Panel>;
+  return <Panel className="border-amber-200 bg-amber-50 p-6"><p className="font-semibold text-amber-950">Dashboard data is unavailable</p><p className="mt-1 text-sm text-amber-800">{message}</p><p className="mt-3 text-xs text-amber-700">Complete <Link className="font-semibold underline" href="/onboarding">workspace setup</Link> and ensure the API is running.</p></Panel>;
 }

@@ -23,16 +23,9 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+from abx_schemas.generated.contract import HASHED_FIELDS
+
 GENESIS_HASH = hashlib.sha256(b"").hexdigest()
-
-# Field order here defines the CH row layout (matches store.EVENT_COLUMNS).
-HASHED_FIELDS = [
-    "event_id", "tenant_id", "agent_id", "session_id", "seq", "ts",
-    "source", "event_type", "operation", "credential_ref", "resource_refs",
-    "payload_digest", "payload_ref", "payload_truncated", "redactions",
-    "prev_hash",
-]
-
 
 def format_ts(ts: datetime) -> str:
     """RFC3339, UTC, exactly millisecond precision, Z suffix."""

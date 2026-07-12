@@ -206,12 +206,12 @@ def _facts(tenant_id: str, event: dict[str, Any]) -> EventFacts:
         "AND agent_id=%(agent)s",
         {"tenant": tenant_id, "agent": event["agent_id"]},
     )[0]["first_seen"]
-    first_seen = min(
-        [value for value in (agent[1] if agent else None, recorded_start) if value],
-        default=datetime.now(UTC),
-    )
-    if first_seen.tzinfo is None:
-        first_seen = first_seen.replace(tzinfo=UTC)
+    candidates = [value for value in (agent[1] if agent else None, recorded_start) if value]
+    aware_candidates = [
+        value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+        for value in candidates
+    ]
+    first_seen = min(aware_candidates, default=datetime.now(UTC))
     history_days = (datetime.now(UTC) - first_seen).total_seconds() / 86400
     inventory = next(
         (ref.removeprefix("abx:tool-inventory:") for ref in refs

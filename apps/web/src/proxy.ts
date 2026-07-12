@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 // unauthenticated. Production deploys must set the keys (checked at runtime).
 const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
 
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
+const isPublicRoute = createRouteMatcher(["/", "/security", "/sign-in(.*)", "/sign-up(.*)"]);
 
 export default clerkEnabled
   ? clerkMiddleware(async (auth, req) => {

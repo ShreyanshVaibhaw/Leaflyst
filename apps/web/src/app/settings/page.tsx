@@ -1,0 +1,20 @@
+import { ErrorState, PageHeader, Panel } from "@/components/ui";
+import { apiGet, formatDate, humanize, type TenantSettings } from "@/lib/api";
+import { revokeScopedToken, updateTenantSettings } from "./actions";
+import { TokenForm } from "./token-form";
+
+export const dynamic = "force-dynamic";
+
+export default async function SettingsPage() {
+  let settings: TenantSettings;
+  try { settings = await apiGet<TenantSettings>("/v1/settings"); }
+  catch (error) { return <><PageHeader eyebrow="Workspace" title="Settings" description="Tenant identity, scoped tokens, retention, and non-disableable redaction controls." /><ErrorState message={error instanceof Error ? error.message : "Settings unavailable"} /></>; }
+  return <>
+    <PageHeader eyebrow="Workspace" title="Settings" description="Manage recording boundaries without weakening mandatory server-side redaction." />
+    <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <Panel className="p-6"><h2 className="font-semibold">Tenant and retention</h2><form action={updateTenantSettings} className="mt-5 space-y-4"><label className="block text-sm font-medium">Workspace name<input name="tenant_name" required maxLength={200} defaultValue={settings.tenant_name} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2" /></label><label className="block text-sm font-medium">Payload retention (days)<input name="retention_days" required type="number" min={1} max={3650} defaultValue={settings.retention_days} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2" /></label><label className="flex items-start gap-3 rounded-lg bg-slate-50 p-4 text-sm"><input name="capture_payloads" type="checkbox" defaultChecked={settings.capture_payloads} className="mt-1" /><span><b>Store redacted payload bodies</b><span className="mt-1 block text-xs leading-5 text-slate-600">When disabled, metadata and a digest of the redacted body remain verifiable, but no payload body enters object storage.</span></span></label><button className="rounded-lg bg-[#081a2c] px-4 py-2 text-sm font-semibold text-white">Save settings</button></form></Panel>
+      <Panel className="p-6"><h2 className="font-semibold">Members</h2><p className="mt-1 text-xs text-slate-500">Created {formatDate(settings.created_at)}</p><div className="mt-4 divide-y divide-slate-100">{settings.members.length ? settings.members.map((member) => <div key={member.user_ref} className="flex justify-between py-3 text-sm"><span className="font-mono text-xs">{member.user_ref}</span><span className="capitalize text-slate-500">{member.role}</span></div>) : <p className="py-3 text-sm text-slate-500">Local development workspace</p>}</div><h2 className="mt-6 font-semibold">Mandatory redaction rules</h2><div className="mt-3 flex flex-wrap gap-2">{settings.redaction_rules.map((rule) => <span key={rule} className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-800">{humanize(rule)}</span>)}</div></Panel>
+    </div>
+    <Panel className="mt-6 p-6"><h2 className="font-semibold">Write-only tokens</h2><p className="mt-1 text-xs text-slate-500">Recording and scanner tokens are separately scoped. Values are shown once and stored only as hashes.</p><div className="mt-5"><TokenForm /></div><div className="mt-5 divide-y divide-slate-100">{settings.tokens.map((token) => { const revoke = revokeScopedToken.bind(null, token.kind, token.id); return <div key={`${token.kind}-${token.id}`} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><p className="text-sm font-medium">{token.label}</p><p className="mt-1 text-xs text-slate-500">{humanize(token.kind)} · created {formatDate(token.created_at)}{token.revoked_at ? ` · revoked ${formatDate(token.revoked_at)}` : ""}</p></div>{token.revoked_at ? <span className="text-xs font-semibold text-slate-400">Revoked</span> : <form action={revoke}><button className="rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700">Revoke</button></form>}</div>; })}</div></Panel>
+  </>;
+}

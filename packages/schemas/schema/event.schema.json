@@ -3,6 +3,11 @@
   "$id": "https://agentblackbox.dev/schemas/event.schema.json",
   "title": "CanonicalEvent",
   "description": "Every captured agent action, from any source, normalized into this shape before ingest. event_hash covers all fields except itself, including payload_digest but never the payload body (erasure-compatible chain).",
+  "x-abx-hashed-fields": [
+    "event_id", "tenant_id", "agent_id", "session_id", "seq", "ts",
+    "source", "event_type", "operation", "credential_ref", "resource_refs",
+    "payload_digest", "payload_ref", "payload_truncated", "redactions", "prev_hash"
+  ],
   "type": "object",
   "additionalProperties": false,
   "required": [

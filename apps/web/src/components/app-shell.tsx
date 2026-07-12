@@ -7,6 +7,9 @@ const nav = [
   ["Agents", "/agents"],
   ["Alerts", "/alerts"],
   ["Integrations", "/integrations"],
+  ["Demo", "/demo"],
+  ["Setup", "/onboarding"],
+  ["Settings", "/settings"],
 ] as const;
 
 export function AppShell({ children }: { children: React.ReactNode }) {

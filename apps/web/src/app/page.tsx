@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ErrorState, PageHeader, Panel, SeverityBadge } from "@/components/ui";
 import { apiGet, formatDate, type Integration, type Overview } from "@/lib/api";
+import { getTenantId } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  if (!(await getTenantId())) redirect("/onboarding");
   let overview: Overview;
   let integrations: Integration[];
   try {

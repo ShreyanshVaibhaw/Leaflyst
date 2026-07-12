@@ -53,7 +53,12 @@ def s3_client() -> Any:
 def put_payload(tenant_id: str, event_id: str, body: bytes) -> str:
     """Store a redacted payload body; returns the payload_ref."""
     key = f"{tenant_id}/{event_id}"
-    s3_client().put_object(Bucket=settings.payload_bucket, Key=key, Body=body)
+    encryption = (
+        {"ServerSideEncryption": settings.s3_server_side_encryption}
+        if settings.s3_server_side_encryption
+        else {}
+    )
+    s3_client().put_object(Bucket=settings.payload_bucket, Key=key, Body=body, **encryption)
     return key
 
 

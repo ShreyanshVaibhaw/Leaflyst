@@ -10,6 +10,7 @@ def _env(name: str, default: str) -> str:
 
 @dataclass(frozen=True)
 class Settings:
+    environment: str = field(default_factory=lambda: _env("ABX_ENV", "development"))
     pg_dsn: str = field(
         default_factory=lambda: _env(
             "ABX_PG_DSN", "postgresql://abx:abx_dev_password@localhost:5432/abx"
@@ -31,6 +32,17 @@ class Settings:
     )
     payload_bucket: str = field(default_factory=lambda: _env("ABX_PAYLOAD_BUCKET", "abx-payloads"))
     anchor_bucket: str = field(default_factory=lambda: _env("ABX_ANCHOR_BUCKET", "abx-anchors"))
+    s3_server_side_encryption: str = field(
+        default_factory=lambda: _env("ABX_S3_SERVER_SIDE_ENCRYPTION", "")
+    )
+    require_https: bool = field(
+        default_factory=lambda: _env("ABX_REQUIRE_HTTPS", "false").lower() == "true"
+    )
+    allowed_hosts: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            _env("ABX_ALLOWED_HOSTS", "localhost,127.0.0.1,testserver").split(",")
+        )
+    )
     # ponytail: single shared admin key for read endpoints until dashboard auth
     # lands (Phase 4+); per-tenant read tokens replace this.
     admin_key: str = field(default_factory=lambda: _env("ABX_ADMIN_KEY", "dev-admin-key"))
@@ -39,6 +51,9 @@ class Settings:
         default_factory=lambda: int(_env("ABX_PAYLOAD_MAX_BYTES", str(32 * 1024)))
     )
     max_batch_events: int = field(default_factory=lambda: int(_env("ABX_MAX_BATCH", "5000")))
+    scan_upload_max_bytes: int = field(
+        default_factory=lambda: int(_env("ABX_SCAN_UPLOAD_MAX_BYTES", str(2 * 1024 * 1024)))
+    )
     cors_origins: tuple[str, ...] = field(
         default_factory=lambda: tuple(
             _env("ABX_CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -76,6 +91,28 @@ class Settings:
     github_revoke_token: str = field(
         default_factory=lambda: _env("ABX_GITHUB_REVOKE_TOKEN", "")
     )
+    demo_enabled: bool = field(
+        default_factory=lambda: _env("ABX_DEMO_ENABLED", "false").lower() == "true"
+    )
 
 
 settings = Settings()
+
+
+def production_config_errors(value: Settings) -> list[str]:
+    """Reject unsafe production defaults before serving requests."""
+    if value.environment != "production":
+        return []
+    errors: list[str] = []
+    if not value.require_https:
+        errors.append("ABX_REQUIRE_HTTPS must be true")
+    if value.admin_key == "dev-admin-key" or len(value.admin_key) < 32:
+        errors.append("ABX_ADMIN_KEY must be a strong non-default value")
+    if (
+        value.github_state_secret == "dev-github-state-secret"
+        or len(value.github_state_secret) < 32
+    ):
+        errors.append("ABX_GITHUB_STATE_SECRET must be a strong non-default value")
+    if not value.s3_server_side_encryption:
+        errors.append("ABX_S3_SERVER_SIDE_ENCRYPTION must be configured")
+    return errors

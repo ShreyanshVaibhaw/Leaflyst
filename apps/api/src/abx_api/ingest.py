@@ -50,6 +50,13 @@ def ingest(
         raise HTTPException(status_code=413, detail="batch too large")
 
     with pg_pool().connection() as conn:
+        # Coordinate capture/retention setting changes with in-flight batches.
+        # The settings update locks the same tenant row through UPDATE, so once
+        # it returns no batch that observed the old capture policy can still write.
+        tenant = conn.execute(
+            "SELECT id FROM tenants WHERE id=%s FOR UPDATE", (tenant_id,)
+        ).fetchone()
+        assert tenant is not None
         # Serialize concurrent batches per tenant on the chain-head row.
         head = conn.execute(
             "SELECT head_hash, head_seq FROM chain_heads WHERE tenant_id = %s FOR UPDATE",
@@ -67,10 +74,15 @@ def ingest(
             ).fetchone()
             assert head is not None
         prev_hash, chain_seq = str(head[0]), int(head[1])
+        tenant_setting = conn.execute(
+            "SELECT capture_payloads FROM tenant_settings WHERE tenant_id=%s",
+            (tenant_id,),
+        ).fetchone()
+        capture_payloads = bool(tenant_setting[0]) if tenant_setting else True
 
         # Redact + store payloads concurrently (S3 puts are the per-event
         # bottleneck), then chain sequentially over the results in order.
-        prepared = prepare_events(tenant_id, list(batch.events))
+        prepared = prepare_events(tenant_id, list(batch.events), capture_payloads)
         rows: list[list[Any]] = []
         for ie, digest, payload_ref, redactions, truncated in prepared:
             event = finalize_event(
@@ -109,23 +121,25 @@ def ingest(
 _Prepared = tuple[IngestEvent, str, str | None, list[str], bool]
 
 
-def _prepare_one(tenant_id: str, ie: IngestEvent) -> _Prepared:
+def _prepare_one(tenant_id: str, ie: IngestEvent, capture_payloads: bool) -> _Prepared:
     """Redact -> truncate -> digest -> store body. The parallelizable, side-effecting
     part; no chaining here (that must stay sequential)."""
     if ie.payload is None:
         return ie, hashlib.sha256(b"").hexdigest(), None, [], False
     body, redactions, truncated = redact_and_truncate(ie.payload, settings.payload_max_bytes)
     digest = hashlib.sha256(body).hexdigest()
-    payload_ref = put_payload(tenant_id, str(ie.event_id), body)
+    payload_ref = put_payload(tenant_id, str(ie.event_id), body) if capture_payloads else None
     return ie, digest, payload_ref, redactions, truncated
 
 
-def prepare_events(tenant_id: str, events: list[IngestEvent]) -> list[_Prepared]:
+def prepare_events(
+    tenant_id: str, events: list[IngestEvent], capture_payloads: bool = True
+) -> list[_Prepared]:
     """Prepare all events, preserving order. S3 puts run concurrently."""
     if not any(e.payload for e in events):
-        return [_prepare_one(tenant_id, e) for e in events]
+        return [_prepare_one(tenant_id, e, capture_payloads) for e in events]
     with ThreadPoolExecutor(max_workers=16) as pool:
-        return list(pool.map(lambda e: _prepare_one(tenant_id, e), events))
+        return list(pool.map(lambda e: _prepare_one(tenant_id, e, capture_payloads), events))
 
 
 def finalize_event(

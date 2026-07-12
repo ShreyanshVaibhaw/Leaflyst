@@ -17,11 +17,18 @@ from abx_api.settings import settings
 from abx_api.store import pg_pool
 
 TOKEN_PREFIX = "abx_ingest_"
+SCAN_TOKEN_PREFIX = "abx_scan_"
 
 
 def new_ingest_token() -> tuple[str, str]:
     """Returns (token, token_hash). The token is shown once and never stored."""
     token = TOKEN_PREFIX + secrets.token_urlsafe(32)
+    return token, hashlib.sha256(token.encode()).hexdigest()
+
+
+def new_scan_token() -> tuple[str, str]:
+    """Returns a scan-upload token that cannot ingest events or read data."""
+    token = SCAN_TOKEN_PREFIX + secrets.token_urlsafe(32)
     return token, hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -37,6 +44,20 @@ def tenant_from_token(authorization: str = Header(default="")) -> str:
         ).fetchone()
     if row is None:
         raise HTTPException(status_code=401, detail="invalid ingest token")
+    return str(row[0])
+
+
+def tenant_from_scan_token(authorization: str = Header(default="")) -> str:
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="missing bearer token")
+    token_hash = hashlib.sha256(authorization.removeprefix("Bearer ").strip().encode()).hexdigest()
+    with pg_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT tenant_id FROM scan_upload_tokens WHERE token_hash=%s AND revoked_at IS NULL",
+            (token_hash,),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=401, detail="invalid scan token")
     return str(row[0])
 
 

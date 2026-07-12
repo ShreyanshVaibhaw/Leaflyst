@@ -14,6 +14,7 @@ from abx_schemas.generated.event import (
     Outcome,
     Source,
 )
+from abx_schemas.generated.evidence import EvidenceRecord
 from abx_schemas.generated.ingest import (
     EventType as IngestEventType,
 )
@@ -33,6 +34,7 @@ from abx_schemas.generated.ingest import (
 __all__ = [
     "CanonicalEvent",
     "EventType",
+    "EvidenceRecord",
     "IngestEvent",
     "IngestEventType",
     "IngestOperation",

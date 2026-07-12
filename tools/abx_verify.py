@@ -1,87 +1,186 @@
 #!/usr/bin/env python3
-"""abx-verify: standalone, dependency-free chain verifier.
+"""Verify an AgentBlackBox evidence bundle using only the Python standard library."""
 
-Verifies an exported AgentBlackBox event chain with NO access to the service:
-anyone can independently confirm the record was not tampered with.
+from __future__ import annotations
 
-Usage:
-    python abx_verify.py events.jsonl [--expect-head <sha256>]
-
-The input is JSON Lines: one canonical event per line, in chain order.
-Exit code 0 = chain verifies, 1 = verification FAILED, 2 = usage error.
-
-Only the Python standard library is used, on purpose: the verifier must not
-require trusting our code distribution chain. Canonical form (must match the
-service): JSON with sorted keys and compact separators over every field except
-event_hash; sha256 hex; prev_hash of the first event in a full export is
-sha256 of the empty string.
-"""
-
+import argparse
 import hashlib
 import json
 import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
 
+GENESIS_HASH = hashlib.sha256(b"").hexdigest()
+# BEGIN GENERATED HASHED FIELDS
 HASHED_FIELDS = [
-    "event_id", "tenant_id", "agent_id", "session_id", "seq", "ts",
-    "source", "event_type", "operation", "credential_ref", "resource_refs",
-    "payload_digest", "payload_ref", "payload_truncated", "redactions",
+    "event_id",
+    "tenant_id",
+    "agent_id",
+    "session_id",
+    "seq",
+    "ts",
+    "source",
+    "event_type",
+    "operation",
+    "credential_ref",
+    "resource_refs",
+    "payload_digest",
+    "payload_ref",
+    "payload_truncated",
+    "redactions",
     "prev_hash",
 ]
+# END GENERATED HASHED FIELDS
 
 
-def compute_event_hash(event: dict) -> str:
-    doc = {k: event[k] for k in HASHED_FIELDS}
-    blob = json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(blob).hexdigest()
+@dataclass(frozen=True)
+class Verification:
+    valid: bool
+    events_checked: int
+    first_divergent_event_id: str | None
+    checkpoint_verified: bool
+    anchor_verified: bool | None
+    trusted_anchor_verified: bool | None
+    message: str
 
 
-def main(argv: list) -> int:
-    expect_head = None
-    positional = []
-    rest = argv[1:]
-    i = 0
-    while i < len(rest):
-        if rest[i] == "--expect-head":
-            expect_head = rest[i + 1] if i + 1 < len(rest) else None
-            i += 2
-            continue
-        positional.append(rest[i])
-        i += 1
-    if len(positional) != 1 or expect_head == "":
-        print(__doc__, file=sys.stderr)
-        return 2
-    args = positional
+def event_hash(event: dict[str, Any]) -> str:
+    canonical = json.dumps(
+        {field: event[field] for field in HASHED_FIELDS},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return hashlib.sha256(canonical).hexdigest()
 
-    prev = None
-    count = 0
-    with open(args[0], encoding="utf-8") as f:
-        for lineno, line in enumerate(f, 1):
+
+def _failure(checked: int, event_id: str | None, message: str) -> Verification:
+    return Verification(False, checked, event_id, False, None, None, message)
+
+
+def verify_file(path: Path, trusted_head: str, legacy_jsonl: bool = False) -> Verification:
+    """Verify an evidence stream incrementally, using constant memory."""
+    with path.open(encoding="utf-8") as stream:
+        if legacy_jsonl:
+            tenant_id = ""
+        else:
+            first = stream.readline()
+            header = json.loads(first)
+            if not isinstance(header, dict) or header.get("type") != "header":
+                return _failure(0, None, "evidence header is missing")
+            if header.get("format") != "abx-evidence-v1":
+                return _failure(0, None, "unsupported evidence format")
+            tenant_id = str(header.get("tenant_id", ""))
+
+        previous = GENESIS_HASH
+        count = 0
+        footer: dict[str, Any] | None = None
+        for line in stream:
             if not line.strip():
                 continue
-            event = json.loads(line)
-            recomputed = compute_event_hash(event)
-            if recomputed != event["event_hash"]:
-                print(
-                    f"FAILED at line {lineno} (event {event.get('event_id')}): "
-                    f"stored hash {event['event_hash'][:16]}... != recomputed {recomputed[:16]}..."
-                )
-                return 1
-            if prev is not None and event["prev_hash"] != prev:
-                print(
-                    f"FAILED at line {lineno} (event {event.get('event_id')}): "
-                    f"prev_hash does not match previous event (chain broken)"
-                )
-                return 1
-            prev = event["event_hash"]
+            record = json.loads(line)
+            if not isinstance(record, dict):
+                return _failure(count, None, "evidence record is not an object")
+            if not legacy_jsonl and record.get("type") == "footer":
+                footer = record
+                break
+            event = record if legacy_jsonl else record.get("event")
+            if not isinstance(event, dict):
+                return _failure(count, None, "canonical event is not an object")
+            event_id = str(event.get("event_id", "")) or None
             count += 1
+            if not legacy_jsonl and record.get("chain_seq") != count:
+                return _failure(count - 1, event_id, "chain sequence is not contiguous")
+            event_tenant = str(event.get("tenant_id", ""))
+            if count == 1 and legacy_jsonl:
+                tenant_id = event_tenant
+            if event_tenant != tenant_id:
+                return _failure(count - 1, event_id, "event tenant does not match")
+            if event.get("prev_hash") != previous:
+                return _failure(count - 1, event_id, "previous-hash link is broken")
+            try:
+                computed = event_hash(event)
+            except (KeyError, TypeError, ValueError):
+                return _failure(count - 1, event_id, "event is missing canonical fields")
+            if event.get("event_hash") != computed:
+                return _failure(count - 1, event_id, "event hash does not match canonical content")
+            previous = computed
 
-    if expect_head is not None and prev != expect_head:
-        print(f"FAILED: final hash {prev} != expected head {expect_head}")
-        return 1
+        if count == 0:
+            return _failure(0, None, "evidence stream has no events")
+        normalized = trusted_head.lower()
+        if len(normalized) != 64 or any(
+            character not in "0123456789abcdef" for character in normalized
+        ):
+            return _failure(count, None, "trusted anchor hash is not SHA-256 hex")
+        if legacy_jsonl:
+            if previous != normalized:
+                return _failure(count, None, "trusted chain head does not match the stream")
+            return Verification(
+                True, count, None, True, None, True, "chain and trusted head are valid"
+            )
+        if footer is None:
+            return _failure(count, None, "evidence footer is missing")
+        if any(line.strip() for line in stream):
+            return _failure(count, None, "records follow the evidence footer")
+        checkpoint = footer.get("checkpoint")
+        anchor = footer.get("anchor")
+        checkpoint_ok = (
+            isinstance(checkpoint, dict)
+            and checkpoint.get("head_seq") == count
+            and checkpoint.get("head_hash") == previous
+        )
+        anchor_ok = (
+            isinstance(anchor, dict)
+            and str(anchor.get("tenant_id", "")) == tenant_id
+            and anchor.get("head_seq") == count
+            and anchor.get("head_hash") == previous
+        )
+        if not checkpoint_ok:
+            return _failure(count, None, "checkpoint does not match the streamed chain")
+        if not anchor_ok:
+            return _failure(count, None, "anchor does not cover the streamed checkpoint")
+        if previous != normalized:
+            return _failure(count, None, "trusted anchor hash does not match the stream")
+        return Verification(
+            True,
+            count,
+            None,
+            True,
+            True,
+            True,
+            "chain, checkpoint, and independently supplied anchor are valid",
+        )
 
-    print(f"OK: {count} events verified" + (", head matches" if expect_head else ""))
-    return 0
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="abx-verify")
+    parser.add_argument("bundle", type=Path, help="path to an abx-evidence-v1 JSON file")
+    trust = parser.add_mutually_exclusive_group(required=True)
+    trust.add_argument(
+        "--anchor-hash",
+        help="trusted anchor SHA-256 hash obtained independently from the evidence bundle",
+    )
+    trust.add_argument(
+        "--expect-head",
+        help="trusted chain head for legacy canonical-event JSONL exports",
+    )
+    args = parser.parse_args(argv)
+    try:
+        trusted_head = args.expect_head or args.anchor_hash
+        result = verify_file(args.bundle, trusted_head, legacy_jsonl=bool(args.expect_head))
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
+        print(f"INVALID: {exc}", file=sys.stderr)
+        return 2
+    prefix = "VALID" if result.valid else "INVALID"
+    if result.valid and args.expect_head:
+        print(f"{result.events_checked} events verified; trusted head matches")
+    else:
+        print(f"{prefix}: {result.message}; events checked: {result.events_checked}")
+    if result.first_divergent_event_id:
+        print(f"first divergent event: {result.first_divergent_event_id}")
+    return 0 if result.valid else 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(main())

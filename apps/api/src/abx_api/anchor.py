@@ -30,7 +30,14 @@ def anchor_all() -> int:
                 "anchored_at": now.isoformat(timespec="milliseconds"),
             }
         ).encode()
-        s3_client().put_object(Bucket=settings.anchor_bucket, Key=key, Body=body)
+        encryption = (
+            {"ServerSideEncryption": settings.s3_server_side_encryption}
+            if settings.s3_server_side_encryption
+            else {}
+        )
+        s3_client().put_object(
+            Bucket=settings.anchor_bucket, Key=key, Body=body, **encryption
+        )
     return len(heads)
 
 

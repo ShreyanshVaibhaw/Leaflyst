@@ -1,7 +1,8 @@
-import { tenantId } from "@/lib/api";
+import { getTenantId } from "@/lib/tenant";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string; format: string }> }) {
   const { id, format } = await params;
+  const tenantId = await getTenantId();
   if (!tenantId || !["csv", "json"].includes(format)) return new Response("Not found", { status: 404 });
   const url = new URL(`/v1/replay/sessions/${encodeURIComponent(id)}/blast-radius.${format}`, process.env.ABX_API_URL ?? "http://localhost:8000");
   url.searchParams.set("tenant_id", tenantId);
