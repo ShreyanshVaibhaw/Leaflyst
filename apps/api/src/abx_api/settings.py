@@ -54,6 +54,28 @@ class Settings:
     github_state_secret: str = field(
         default_factory=lambda: _env("ABX_GITHUB_STATE_SECRET", "dev-github-state-secret")
     )
+    alert_cooldown_minutes: int = field(
+        default_factory=lambda: int(_env("ABX_ALERT_COOLDOWN_MINUTES", "60"))
+    )
+    slack_webhook_url: str = field(
+        default_factory=lambda: _env("ABX_SLACK_WEBHOOK_URL", "")
+    )
+    resend_api_key: str = field(default_factory=lambda: _env("ABX_RESEND_API_KEY", ""))
+    alert_email_from: str = field(
+        default_factory=lambda: _env("ABX_ALERT_EMAIL_FROM", "AgentBlackBox <alerts@example.com>")
+    )
+    aws_revoke_access_key_id: str = field(
+        default_factory=lambda: _env("ABX_AWS_REVOKE_ACCESS_KEY_ID", "")
+    )
+    aws_revoke_secret_access_key: str = field(
+        default_factory=lambda: _env("ABX_AWS_REVOKE_SECRET_ACCESS_KEY", "")
+    )
+    aws_revoke_session_token: str = field(
+        default_factory=lambda: _env("ABX_AWS_REVOKE_SESSION_TOKEN", "")
+    )
+    github_revoke_token: str = field(
+        default_factory=lambda: _env("ABX_GITHUB_REVOKE_TOKEN", "")
+    )
 
 
 settings = Settings()

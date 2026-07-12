@@ -15,6 +15,7 @@ class Source(StrEnum):
     mcp_tap = 'mcp_tap'
     sdk_langgraph = 'sdk_langgraph'
     otel_ingest = 'otel_ingest'
+    admin_api = 'admin_api'
 
 
 class EventType(StrEnum):
@@ -26,6 +27,7 @@ class EventType(StrEnum):
     http_call = 'http_call'
     file_op = 'file_op'
     db_op = 'db_op'
+    credential_revocation = 'credential_revocation'
 
 
 class Outcome(StrEnum):

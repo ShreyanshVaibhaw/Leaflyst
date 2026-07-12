@@ -23,6 +23,7 @@ name = "abx-api"
 version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
+    { name = "abx-rules" },
     { name = "abx-scanner" },
     { name = "abx-schemas" },
     { name = "boto3" },
@@ -38,6 +39,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "abx-rules", editable = "services/rules" },
     { name = "abx-scanner", editable = "services/scanner" },
     { name = "abx-schemas", editable = "packages/schemas" },
     { name = "boto3", specifier = ">=1.35" },
@@ -56,17 +58,11 @@ name = "abx-rules"
 version = "0.1.0"
 source = { editable = "services/rules" }
 dependencies = [
-    { name = "abx-schemas" },
-    { name = "psycopg", extra = ["binary"] },
     { name = "redis" },
 ]
 
 [package.metadata]
-requires-dist = [
-    { name = "abx-schemas", editable = "packages/schemas" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
-    { name = "redis", specifier = ">=5.2" },
-]
+requires-dist = [{ name = "redis", specifier = ">=5.2" }]
 
 [[package]]
 name = "abx-scanner"

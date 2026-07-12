@@ -56,7 +56,7 @@
     },
     "source": {
       "type": "string",
-      "enum": ["mcp_tap", "sdk_langgraph", "otel_ingest"],
+      "enum": ["mcp_tap", "sdk_langgraph", "otel_ingest", "admin_api"],
       "title": "Source"
     },
     "event_type": {
@@ -69,7 +69,8 @@
         "agent_step",
         "http_call",
         "file_op",
-        "db_op"
+        "db_op",
+        "credential_revocation"
       ],
       "title": "EventType"
     },

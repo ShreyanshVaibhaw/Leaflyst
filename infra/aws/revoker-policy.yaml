@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: AgentBlackBox write-only access-key containment policy (never used for scanning)
+Parameters:
+  RevokerPrincipalName:
+    Type: String
+    Description: Existing IAM role or user that AgentBlackBox uses only for revocation
+Resources:
+  RevokerPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Deactivate or delete IAM user access keys; contains no read actions
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ContainAccessKeysOnly
+            Effect: Allow
+            Action:
+              - iam:UpdateAccessKey
+              - iam:DeleteAccessKey
+            Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:user/*
+      Roles:
+        - !Ref RevokerPrincipalName

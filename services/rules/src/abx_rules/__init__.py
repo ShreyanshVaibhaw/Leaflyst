@@ -1,1 +1,3 @@
-# Implemented in Phase 7 (plan.md). Package exists so the workspace resolves.
+from abx_rules.engine import AlertCandidate, EventFacts, evaluate
+
+__all__ = ["AlertCandidate", "EventFacts", "evaluate"]

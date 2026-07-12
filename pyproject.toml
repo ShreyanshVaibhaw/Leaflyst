@@ -49,6 +49,7 @@ files = [
     "packages/abx-sdk/src",
     "apps/api/src",
     "services/scanner/src",
+    "services/rules/src",
 ]
 # datamodel-code-generator emits constr()/conint() annotations; valid with the pydantic plugin.
 disable_error_code = ["valid-type"]

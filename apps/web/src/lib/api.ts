@@ -52,6 +52,9 @@ export type TimelineEvent = { kind: "event"; event_id: string; session_id: strin
 export type GapMarker = { kind: "gap"; after_seq: number; before_seq: number; missing_count: number };
 export type BlastResource = { resource_ref: string; provider: string; kind: string; event_ids: string[]; credentials: CredentialLink[] };
 export type SessionDetail = { session: SessionSummary; timeline: Array<TimelineEvent | GapMarker>; blast_radius: BlastResource[]; verification: { valid: boolean; events_checked: number; first_divergent_event_id: string | null; head_matches_checkpoint: boolean | null }; read_only: boolean };
+export type Alert = { id: string; rule_id: string; severity: string; title: string; agent_id: string; credential_ref: string | null; event_id: string; session_id: string; evidence: Record<string, unknown>; status: string; hit_count: number; first_seen: string; last_seen: string; dispatch_status: Record<string, unknown> };
+export type AlertChannel = { kind: string; target: string; enabled: boolean; secret_configured: boolean };
+export type ImpactPreview = { credential_id: string; provider: string; kind: string; fingerprint: string; status: string; cold: boolean; one_click: boolean; write_credential_configured: boolean; last_used_at: string | null; events_last_30d: number; last_recorded_at: string | null; agent_consumers: string[]; reachable_resources: string[]; next_action: string; guided_commands: string[] };
 
 const apiUrl = process.env.ABX_API_URL ?? "http://localhost:8000";
 const adminKey = process.env.ABX_ADMIN_KEY ?? "dev-admin-key";
@@ -82,6 +85,15 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const url = new URL(path, apiUrl);
   url.searchParams.set("tenant_id", tenantId);
   const response = await fetch(url, { method: "POST", headers: { "X-ABX-Admin-Key": adminKey, "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+  if (!response.ok) throw new Error(`AgentBlackBox API returned ${response.status}`);
+  return (await response.json()) as T;
+}
+
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  if (!tenantId) throw new Error("ABX_TENANT_ID is not configured for the dashboard");
+  const url = new URL(path, apiUrl);
+  url.searchParams.set("tenant_id", tenantId);
+  const response = await fetch(url, { method: "PUT", headers: { "X-ABX-Admin-Key": adminKey, "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
   if (!response.ok) throw new Error(`AgentBlackBox API returned ${response.status}`);
   return (await response.json()) as T;
 }

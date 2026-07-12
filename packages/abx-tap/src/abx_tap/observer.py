@@ -174,11 +174,16 @@ class Observer:
                 if h is not None:
                     drift = self.last_tools_hash is not None and h != self.last_tools_hash
                     self.last_tools_hash = h
+                    refs = [f"abx:tool-inventory:{h}"]
+                    if drift:
+                        refs.append("abx:tool-drift:true")
                     payload = json.dumps(
                         {"tools_hash": h, "drifted": drift, "raw": payload}
                     )
-
-            refs = []
+                else:
+                    refs = []
+            else:
+                refs = []
             _extract_resource_refs(msg.get("result"), refs)
             return [self._base_event(
                 "mcp_response",

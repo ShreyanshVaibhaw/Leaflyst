@@ -64,3 +64,19 @@ Call `callback.shutdown()` during application shutdown to flush buffered spans.
 Existing OTLP exporters can send protobuf traces to `/v1/otlp/traces` with the
 write-only ingest token in the `Authorization: Bearer ...` header. Current and
 legacy OTel GenAI, OpenLLMetry, and OpenInference attributes are normalized.
+
+## Alerts and containment
+
+Run `uv run abx-alert-worker` to evaluate queued events without adding work to
+the recording path. Slack and email delivery use deployment secrets
+`ABX_SLACK_WEBHOOK_URL` and `ABX_RESEND_API_KEY`; the dashboard stores only
+non-secret channel settings and email recipients.
+
+Revocation never reuses scanner credentials. AWS containment requires the
+separate `ABX_AWS_REVOKE_ACCESS_KEY_ID` and
+`ABX_AWS_REVOKE_SECRET_ACCESS_KEY` identity, restricted to
+`iam:UpdateAccessKey` and `iam:DeleteAccessKey` using
+`infra/aws/revoker-policy.yaml`. GitHub containment uses the separate
+`ABX_GITHUB_REVOKE_TOKEN` with Personal access tokens write and repository
+Administration write. Warm credentials remain guided-only regardless of
+configuration.

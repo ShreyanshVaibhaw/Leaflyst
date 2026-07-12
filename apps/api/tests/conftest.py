@@ -55,6 +55,8 @@ def tenant() -> Iterator[tuple[str, str]]:
             "DELETE FROM agent_holds_credential WHERE credential_id IN "
             "(SELECT id FROM credentials WHERE tenant_id = %s)", (tenant_id,)
         )
+        for table in ("revocation_actions", "alerts", "alert_channels"):
+            conn.execute(f"DELETE FROM {table} WHERE tenant_id = %s", (tenant_id,))  # noqa: S608
         for table in (
             "findings", "permissions", "resources", "integration_connections",
             "credentials", "principals", "agents", "scan_runs",

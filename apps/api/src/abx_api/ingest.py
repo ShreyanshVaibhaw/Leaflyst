@@ -15,6 +15,7 @@ SELECT ... FOR UPDATE; different tenants proceed in parallel.
 from __future__ import annotations
 
 import hashlib
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Annotated, Any
 
@@ -29,6 +30,7 @@ from abx_api.settings import settings
 from abx_api.store import EVENT_COLUMNS, ch_client, pg_pool, put_payload
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class IngestBatch(BaseModel):
@@ -94,6 +96,12 @@ def ingest(
             (tenant_id, len(rows), len(rows)),
         )
 
+    try:
+        from abx_rules.worker import enqueue_alerts
+
+        enqueue_alerts(tenant_id, [str(event.event_id) for event in batch.events])
+    except Exception:
+        logger.exception("anomaly evaluation degraded for tenant %s", tenant_id)
     return IngestResult(accepted=len(rows), chain_head=prev_hash)
 
 
