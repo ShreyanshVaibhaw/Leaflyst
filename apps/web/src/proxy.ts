@@ -1,9 +1,11 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
-
-// Auth degrades gracefully in local dev: without Clerk keys the app runs
-// unauthenticated. Production deploys must set the keys (checked at runtime).
-const clerkEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+import { NextRequest, NextResponse } from "next/server";
+import {
+  clerkEnabled,
+  clerkPublishableKey,
+  clerkSecretKey,
+  productionAuthRequired,
+} from "@/lib/auth";
 
 const isPublicRoute = createRouteMatcher(["/", "/security", "/sign-in(.*)", "/sign-up(.*)"]);
 
@@ -12,8 +14,12 @@ export default clerkEnabled
       if (!isPublicRoute(req)) {
         await auth.protect();
       }
-    })
-  : () => NextResponse.next();
+    }, { publishableKey: clerkPublishableKey, secretKey: clerkSecretKey })
+  : productionAuthRequired
+    ? (request: NextRequest) => isPublicRoute(request)
+      ? NextResponse.next()
+      : new NextResponse("Authentication is not configured", { status: 503 })
+    : () => NextResponse.next();
 
 export const config = {
   matcher: [

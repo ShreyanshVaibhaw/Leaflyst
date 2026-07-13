@@ -6,11 +6,12 @@ from abx_api.settings import Settings, production_config_errors
 
 
 def test_production_rejects_insecure_defaults() -> None:
-    value = replace(Settings(), environment="production")
+    value = replace(Settings(), environment="production", anchor_retention_days=0)
     errors = production_config_errors(value)
     assert any("HTTPS" in error for error in errors)
     assert any("ADMIN_KEY" in error for error in errors)
     assert any("STATE_SECRET" in error for error in errors)
+    assert any("ANCHOR_RETENTION" in error for error in errors)
 
 
 def test_production_accepts_hardened_transport_and_secrets() -> None:

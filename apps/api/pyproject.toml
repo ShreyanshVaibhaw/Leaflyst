@@ -18,6 +18,9 @@ dependencies = [
     "protobuf>=6.31,<8",
 ]
 
+[project.scripts]
+abx-alert-worker = "abx_api.alert_worker:main"
+
 [tool.uv.sources]
 abx-schemas = { workspace = true }
 abx-scanner = { workspace = true }

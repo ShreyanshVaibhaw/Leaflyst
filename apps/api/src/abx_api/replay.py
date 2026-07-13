@@ -14,6 +14,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from abx_api.auth import require_admin
+from abx_api.export_safety import csv_cell
 from abx_api.store import ch_client, get_payload, pg_pool
 from abx_api.verify import VerifyResult, verify_tenant_chain
 
@@ -206,7 +207,13 @@ def _resource_kind(resource_ref: str) -> tuple[str, str]:
     return "other", parts[0] or "resource"
 
 
-def _load_session(tenant_id: str, session_id: str, *, read_only: bool = False) -> SessionDetail:
+def _load_session(
+    tenant_id: str,
+    session_id: str,
+    *,
+    read_only: bool = False,
+    verification: VerifyResult | None = None,
+) -> SessionDetail:
     rows = _query(
         "SELECT * FROM events WHERE tenant_id = %(tenant)s AND session_id = %(session)s "
         "ORDER BY seq, ts, chain_seq",
@@ -261,7 +268,7 @@ def _load_session(tenant_id: str, session_id: str, *, read_only: bool = False) -
         ended_at=_iso(last["ts"]), event_count=len(rows),
         error_count=sum(row["op_outcome"] == "error" for row in rows),
     )
-    verification = verify_tenant_chain(tenant_id)
+    verification = verification or verify_tenant_chain(tenant_id)
     if read_only and verification.first_divergent_event_id is not None:
         verification = verification.model_copy(update={"first_divergent_event_id": None})
     return SessionDetail(
@@ -293,9 +300,14 @@ def credential_events(tenant_id: str, credential_id: str) -> list[TimelineEvent]
         "AND credential_ref = %(fingerprint)s GROUP BY session_id ORDER BY max(ts) DESC",
         {"tenant": tenant_id, "fingerprint": row[0]},
     )
+    verification = verify_tenant_chain(tenant_id)
     events: list[TimelineEvent] = []
     for record in records:
-        detail = _load_session(tenant_id, record["session_id"])
+        detail = _load_session(
+            tenant_id,
+            record["session_id"],
+            verification=verification,
+        )
         events.extend(item for item in detail.timeline if isinstance(item, TimelineEvent)
                       and item.credential_ref == row[0])
     return events
@@ -345,11 +357,12 @@ def blast_radius_csv(tenant_id: str, session_id: str) -> PlainTextResponse:
     writer = csv.writer(output)
     writer.writerow(["provider", "kind", "resource_ref", "event_ids", "credentials"])
     for resource in detail.blast_radius:
-        writer.writerow([
+        row = [
             resource.provider, resource.kind, resource.resource_ref,
             " ".join(resource.event_ids),
             " ".join(credential.fingerprint for credential in resource.credentials),
-        ])
+        ]
+        writer.writerow(csv_cell(value) for value in row)
     return PlainTextResponse(output.getvalue(), media_type="text/csv")
 
 

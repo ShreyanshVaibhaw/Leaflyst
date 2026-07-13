@@ -12,7 +12,7 @@ from pydantic import BaseModel
 
 from abx_api.alerts import evaluate_event_ids
 from abx_api.auth import require_admin
-from abx_api.ingest import IngestBatch, ingest
+from abx_api.ingest import ingest_events
 from abx_api.settings import settings
 from abx_api.store import pg_pool
 
@@ -168,7 +168,7 @@ def run_demo(tenant_id: str) -> DemoResult:
             "payload": "Sandbox intercepted DROP DATABASE prod_orders; no command was executed.",
         }
     )
-    ingest(IngestBatch(events=[event]), demo_tenant_id)
+    ingest_events(demo_tenant_id, [event])
     evaluate_event_ids(demo_tenant_id, [str(event_id)])
     with pg_pool().connection() as conn:
         alerts = conn.execute(

@@ -1,9 +1,12 @@
 import "server-only";
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { auth } from "@clerk/nextjs/server";
 import { cookies } from "next/headers";
-import { clerkEnabled } from "@/lib/auth";
+import {
+  clerkEnabled,
+  currentUserId,
+  productionAuthRequired,
+} from "@/lib/auth";
 
 const cookieName = "abx_tenant";
 
@@ -33,6 +36,9 @@ async function membershipAllowed(userRef: string, tenantId: string): Promise<boo
 }
 
 export async function getTenantId(): Promise<string> {
+  if (productionAuthRequired && !clerkEnabled) {
+    throw new Error("Clerk authentication is required in production");
+  }
   const value = (await cookies()).get(cookieName)?.value;
   if (value) {
     const separator = value.lastIndexOf(".");
@@ -43,7 +49,7 @@ export async function getTenantId(): Promise<string> {
       if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
         try {
           const parsed = JSON.parse(Buffer.from(payload, "base64url").toString()) as { tenantId?: string; userRef?: string };
-          const currentUser = clerkEnabled ? (await auth()).userId : "local-development-user";
+          const currentUser = await currentUserId();
           if (parsed.tenantId && parsed.userRef === currentUser) {
             if (!clerkEnabled || await membershipAllowed(currentUser, parsed.tenantId)) {
               return parsed.tenantId;

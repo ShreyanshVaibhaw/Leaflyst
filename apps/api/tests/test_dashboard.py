@@ -137,6 +137,19 @@ def test_exports(seeded_tenant: str) -> None:
     assert "CRITICAL" in md_resp.text
 
 
+def test_csv_export_neutralizes_spreadsheet_formulas(monkeypatch) -> None:
+    from abx_api import dashboard
+
+    monkeypatch.setattr(
+        dashboard,
+        "_rows",
+        lambda *_args, **_kwargs: [("over_privileged", "critical", "=WEBSERVICE(A1)", "+cmd")],
+    )
+    response = dashboard.findings_csv("00000000-0000-0000-0000-000000000000")
+    assert "'=WEBSERVICE(A1)" in response.body.decode()
+    assert "'+cmd" in response.body.decode()
+
+
 def test_admin_key_required() -> None:
     resp = client.get("/v1/dashboard/overview", params={"tenant_id": str(uuid.uuid4())})
     assert resp.status_code == 401

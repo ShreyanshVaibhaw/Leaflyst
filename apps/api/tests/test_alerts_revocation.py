@@ -12,10 +12,10 @@ from typing import Any
 import psycopg
 from abx_api import alerts as alert_api
 from abx_api import revocation
+from abx_api.alert_worker import process_job
 from abx_api.main import app
 from abx_api.settings import settings
 from abx_api.store import ch_client
-from abx_rules.worker import process_job
 from conftest import requires_stack
 from fastapi.testclient import TestClient
 from psycopg.types.json import Jsonb
@@ -102,12 +102,12 @@ def test_new_agent_has_no_history_false_positive(tenant: tuple[str, str]) -> Non
 def test_alert_queue_failure_never_blocks_recording(
     tenant: tuple[str, str], monkeypatch: Any,
 ) -> None:
-    import abx_rules.worker
+    import abx_rules.queue
 
     tenant_id, token = tenant
     event = _event("queue-down", "read file", None, [])
     monkeypatch.setattr(
-        abx_rules.worker, "enqueue_alerts",
+        abx_rules.queue, "enqueue_alerts",
         lambda *_args: (_ for _ in ()).throw(ConnectionError("redis down")),
     )
     response = client.post(

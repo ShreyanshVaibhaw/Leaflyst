@@ -32,6 +32,9 @@ class Settings:
     )
     payload_bucket: str = field(default_factory=lambda: _env("ABX_PAYLOAD_BUCKET", "abx-payloads"))
     anchor_bucket: str = field(default_factory=lambda: _env("ABX_ANCHOR_BUCKET", "abx-anchors"))
+    anchor_retention_days: int = field(
+        default_factory=lambda: int(_env("ABX_ANCHOR_RETENTION_DAYS", "3650"))
+    )
     s3_server_side_encryption: str = field(
         default_factory=lambda: _env("ABX_S3_SERVER_SIDE_ENCRYPTION", "")
     )
@@ -53,6 +56,12 @@ class Settings:
     max_batch_events: int = field(default_factory=lambda: int(_env("ABX_MAX_BATCH", "5000")))
     scan_upload_max_bytes: int = field(
         default_factory=lambda: int(_env("ABX_SCAN_UPLOAD_MAX_BYTES", str(2 * 1024 * 1024)))
+    )
+    ingest_body_max_bytes: int = field(
+        default_factory=lambda: int(_env("ABX_INGEST_BODY_MAX_BYTES", str(64 * 1024 * 1024)))
+    )
+    otlp_body_max_bytes: int = field(
+        default_factory=lambda: int(_env("ABX_OTLP_BODY_MAX_BYTES", str(16 * 1024 * 1024)))
     )
     cors_origins: tuple[str, ...] = field(
         default_factory=lambda: tuple(
@@ -115,4 +124,6 @@ def production_config_errors(value: Settings) -> list[str]:
         errors.append("ABX_GITHUB_STATE_SECRET must be a strong non-default value")
     if not value.s3_server_side_encryption:
         errors.append("ABX_S3_SERVER_SIDE_ENCRYPTION must be configured")
+    if value.anchor_retention_days < 1:
+        errors.append("ABX_ANCHOR_RETENTION_DAYS must be at least 1")
     return errors

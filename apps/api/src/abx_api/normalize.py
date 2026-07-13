@@ -27,7 +27,7 @@ from opentelemetry.proto.common.v1.common_pb2 import AnyValue
 from opentelemetry.proto.trace.v1.trace_pb2 import Span
 
 from abx_api.auth import tenant_from_token
-from abx_api.ingest import IngestBatch, ingest
+from abx_api.ingest import ingest_events
 from abx_api.redaction import redact
 from abx_api.store import pg_pool
 
@@ -100,7 +100,7 @@ async def otlp_traces(
     events = normalize_export(export_request)
     if events:
         events = allocate_session_sequences(tenant_id, events)
-        ingest(IngestBatch(events=events), tenant_id)
+        ingest_events(tenant_id, events)
         try:
             link_observed_credentials(tenant_id, events)
         except Exception:

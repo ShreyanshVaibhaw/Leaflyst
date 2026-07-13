@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from abx_rules import worker
+from abx_api import alert_worker as worker
 
 
 class TimeoutRedis:

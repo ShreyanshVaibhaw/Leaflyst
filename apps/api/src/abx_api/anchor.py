@@ -7,7 +7,7 @@ the object-locked, versioned anchor bucket. Run daily (cron / scheduler).
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from abx_api.settings import settings
 from abx_api.store import ensure_buckets, pg_pool, s3_client
@@ -36,7 +36,12 @@ def anchor_all() -> int:
             else {}
         )
         s3_client().put_object(
-            Bucket=settings.anchor_bucket, Key=key, Body=body, **encryption
+            Bucket=settings.anchor_bucket,
+            Key=key,
+            Body=body,
+            ObjectLockMode="COMPLIANCE",
+            ObjectLockRetainUntilDate=now + timedelta(days=settings.anchor_retention_days),
+            **encryption,
         )
     return len(heads)
 

@@ -20,6 +20,7 @@ __pycache__/
 node_modules/
 .next/
 dist/
+release-artifacts/
 
 # OS
 .DS_Store

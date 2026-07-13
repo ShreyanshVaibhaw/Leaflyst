@@ -16,7 +16,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
 from abx_api.auth import require_admin
-from abx_api.ingest import IngestBatch, ingest
+from abx_api.ingest import ingest_events
 from abx_api.settings import settings
 from abx_api.store import ch_client, pg_pool
 
@@ -282,4 +282,4 @@ def _record_chain_event(
                                "events_last_30d": preview.events_last_30d,
                                "error_type": error_type}),
     })
-    ingest(IngestBatch(events=[event]), tenant_id)
+    ingest_events(tenant_id, [event])

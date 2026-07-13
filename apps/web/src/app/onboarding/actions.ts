@@ -1,8 +1,7 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { adminApiPost } from "@/lib/api";
-import { clerkEnabled } from "@/lib/auth";
+import { currentUserId } from "@/lib/auth";
 import { setTenantId } from "@/lib/tenant";
 
 export type OnboardingState = {
@@ -20,7 +19,7 @@ export async function bootstrapTenant(
 ): Promise<OnboardingState> {
   const tenantName = String(formData.get("tenant_name") ?? "").trim();
   if (!tenantName) return { status: "error", message: "Workspace name is required." };
-  const userId = clerkEnabled ? (await auth()).userId : "local-development-user";
+  const userId = await currentUserId();
   if (!userId) return { status: "error", message: "Sign in before creating a workspace." };
   try {
     const result = await adminApiPost<BootstrapResult>("/v1/onboarding/bootstrap", {

@@ -53,6 +53,7 @@ def assert_safe_image(image: str) -> None:
         "ABX_GITHUB_PRIVATE_KEY=",
         "ABX_S3_SECRET_KEY=",
         "ABX_TENANT_COOKIE_SECRET=",
+        "CLERK_SECRET_KEY=",
     )
     if any(value.startswith(forbidden) for value in environment):
         raise RuntimeError(f"{image} contains a configured secret")
@@ -73,6 +74,15 @@ def main() -> int:
         ])
     assert_safe_image(PYTHON_IMAGE)
     assert_safe_image(WEB_IMAGE)
+    missing_auth = subprocess.run(
+        ["docker", "run", "--rm", "-e", "ABX_ENV=production", WEB_IMAGE],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    if missing_auth.returncode == 0 or "Clerk authentication" not in missing_auth.stderr:
+        raise RuntimeError("production web image did not fail closed without Clerk credentials")
 
     suffix = uuid.uuid4().hex[:8]
     api = f"abx-api-{suffix}"

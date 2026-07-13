@@ -1,6 +1,10 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-bookworm@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b
 
-COPY --from=ghcr.io/astral-sh/uv:0.11.24 /uv /uvx /bin/
+ARG GIT_COMMIT=unknown
+LABEL org.opencontainers.image.source="https://github.com/ShreyanshVaibhaw/Leaflyst" \
+      org.opencontainers.image.revision="$GIT_COMMIT"
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.24@sha256:99ea34acedc870ba4ad11a1f540a1c04267c9f30aadc465a94406f52dfda2c36 /uv /uvx /bin/
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

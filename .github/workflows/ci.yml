@@ -60,11 +60,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: Build Python release image
-        run: docker build -f infra/docker/python.Dockerfile -t agentblackbox-python:release-smoke .
+        run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/python.Dockerfile -t agentblackbox-python:release-smoke .
       - name: Build web release image
-        run: docker build -f infra/docker/web.Dockerfile -t agentblackbox-web:release-smoke .
+        run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/web.Dockerfile -t agentblackbox-web:release-smoke .
       - name: Smoke release images
         run: python demo/container_smoke.py --skip-build
+      - name: Generate and verify release provenance
+        run: |
+          python tools/release_manifest.py --output release-artifacts --require-clean
+          python tools/release_manifest.py --verify release-artifacts/release-manifest.json
+      - name: Retain release manifest and SBOMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-provenance-${{ github.sha }}
+          path: release-artifacts
+          if-no-files-found: error
       - name: Start release topology
         run: |
           docker tag agentblackbox-python:release-smoke agentblackbox-python:local
@@ -72,6 +82,8 @@ jobs:
           docker compose --env-file infra/release.env.example -f infra/compose.release.yml up -d --no-build --wait
           curl --fail http://127.0.0.1:18000/readyz
           curl --fail http://127.0.0.1:13000/security
+      - name: Backup and restore integrity drill
+        run: python demo/recovery_drill.py --skip-build
       - name: Release topology logs
         if: failure()
         run: docker compose --env-file infra/release.env.example -f infra/compose.release.yml logs

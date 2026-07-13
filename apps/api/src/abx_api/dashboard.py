@@ -16,6 +16,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from abx_api.auth import require_admin
+from abx_api.export_safety import csv_cell
 from abx_api.store import pg_pool
 
 router = APIRouter(prefix="/v1/dashboard", dependencies=[Depends(require_admin)])
@@ -297,7 +298,7 @@ def findings_csv(tenant_id: str) -> PlainTextResponse:
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["finding_type", "severity", "fingerprint", "remediation"])
-    w.writerows(rows)
+    w.writerows([csv_cell(value) for value in row] for row in rows)
     return PlainTextResponse(buf.getvalue(), media_type="text/csv")
 
 

@@ -1,9 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
 import { adminApiPost, apiPost } from "@/lib/api";
-import { clerkEnabled } from "@/lib/auth";
+import { currentUserId } from "@/lib/auth";
 import { setTenantId } from "@/lib/tenant";
 
 type DemoResult = {
@@ -17,7 +16,7 @@ type DemoResult = {
 
 export async function runPocketOSDemo() {
   const result = await apiPost<DemoResult>("/v1/demo/run", {});
-  const userId = clerkEnabled ? (await auth()).userId : "local-development-user";
+  const userId = await currentUserId();
   if (!userId) throw new Error("Sign in before running the demo");
   await setTenantId(result.tenant_id, userId);
   const params = new URLSearchParams({
@@ -29,7 +28,7 @@ export async function runPocketOSDemo() {
 }
 
 export async function restoreWorkspace() {
-  const userId = clerkEnabled ? (await auth()).userId : "local-development-user";
+  const userId = await currentUserId();
   if (!userId) throw new Error("Sign in before restoring the workspace");
   const result = await adminApiPost<{ tenant_id: string }>("/v1/onboarding/bootstrap", {
     user_ref: userId,

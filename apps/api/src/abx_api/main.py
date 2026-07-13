@@ -4,7 +4,7 @@ from fastapi.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from abx_api.alerts import router as alerts_router
-from abx_api.body_limit import ScanUploadBodyLimit
+from abx_api.body_limit import RequestBodyLimit
 from abx_api.dashboard import router as dashboard_router
 from abx_api.demo import router as demo_router
 from abx_api.evidence import router as evidence_router
@@ -28,7 +28,15 @@ if configuration_errors:
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
 if settings.require_https:
     app.add_middleware(HTTPSRedirectMiddleware)
-app.add_middleware(ScanUploadBodyLimit, max_bytes=settings.scan_upload_max_bytes)
+app.add_middleware(
+    RequestBodyLimit,
+    limits={
+        "/v1/ingest": settings.ingest_body_max_bytes,
+        "/v1/otlp/traces": settings.otlp_body_max_bytes,
+        "/v1/traces": settings.otlp_body_max_bytes,
+        "/v1/scans/local": settings.scan_upload_max_bytes,
+    },
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

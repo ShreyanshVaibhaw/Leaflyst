@@ -42,12 +42,26 @@ class IngestResult(BaseModel):
     chain_head: str
 
 
+class BatchTooLargeError(ValueError):
+    pass
+
+
 @router.post("/v1/ingest", response_model=IngestResult)
 def ingest(
     batch: IngestBatch, tenant_id: Annotated[str, Depends(tenant_from_token)]
 ) -> IngestResult:
-    if len(batch.events) > settings.max_batch_events:
-        raise HTTPException(status_code=413, detail="batch too large")
+    try:
+        return ingest_events(tenant_id, list(batch.events))
+    except BatchTooLargeError as exc:
+        raise HTTPException(status_code=413, detail="batch too large") from exc
+
+
+def ingest_events(tenant_id: str, events: list[IngestEvent]) -> IngestResult:
+    """Persist canonical events without depending on FastAPI transport models."""
+    if not events:
+        raise ValueError("at least one event is required")
+    if len(events) > settings.max_batch_events:
+        raise BatchTooLargeError
 
     with pg_pool().connection() as conn:
         # Coordinate capture/retention setting changes with in-flight batches.
@@ -82,7 +96,7 @@ def ingest(
 
         # Redact + store payloads concurrently (S3 puts are the per-event
         # bottleneck), then chain sequentially over the results in order.
-        prepared = prepare_events(tenant_id, list(batch.events), capture_payloads)
+        prepared = prepare_events(tenant_id, events, capture_payloads)
         rows: list[list[Any]] = []
         for ie, digest, payload_ref, redactions, truncated in prepared:
             event = finalize_event(
@@ -109,9 +123,9 @@ def ingest(
         )
 
     try:
-        from abx_rules.worker import enqueue_alerts
+        from abx_rules.queue import enqueue_alerts
 
-        enqueue_alerts(tenant_id, [str(event.event_id) for event in batch.events])
+        enqueue_alerts(tenant_id, [str(event.event_id) for event in events])
     except Exception:
         logger.exception("anomaly evaluation degraded for tenant %s", tenant_id)
     return IngestResult(accepted=len(rows), chain_head=prev_hash)

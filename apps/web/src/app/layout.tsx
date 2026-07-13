@@ -1,7 +1,7 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { clerkEnabled } from "@/lib/auth";
+import { clerkEnabled, clerkPublishableKey } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import "./globals.css";
 
@@ -33,5 +33,7 @@ export default function RootLayout({
       <body className="min-h-full"><AppShell>{children}</AppShell></body>
     </html>
   );
-  return clerkEnabled ? <ClerkProvider>{html}</ClerkProvider> : html;
+  return clerkEnabled
+    ? <ClerkProvider publishableKey={clerkPublishableKey}>{html}</ClerkProvider>
+    : html;
 }
