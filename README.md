@@ -25,6 +25,7 @@ pnpm -C apps/web install                 # install web deps
 docker compose -f infra/docker-compose.dev.yml up -d
 uv run python infra/migrate.py           # apply postgres migrations
 uv run python packages/schemas/scripts/codegen.py   # regenerate types after schema changes
+uv run python packages/schemas/scripts/api_contracts.py   # regenerate OpenAPI/web API types
 uv run pytest
 uv run ruff check . && uv run mypy
 ```

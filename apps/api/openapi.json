@@ -1,0 +1,4694 @@
+{
+  "components": {
+    "schemas": {
+      "AgentSummary": {
+        "properties": {
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/CredentialLink"
+            },
+            "title": "Credentials",
+            "type": "array"
+          },
+          "event_count": {
+            "default": 0,
+            "title": "Event Count",
+            "type": "integer"
+          },
+          "framework": {
+            "default": "",
+            "title": "Framework",
+            "type": "string"
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          },
+          "session_count": {
+            "default": 0,
+            "title": "Session Count",
+            "type": "integer"
+          },
+          "status": {
+            "default": "active",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "agent_id"
+        ],
+        "title": "AgentSummary",
+        "type": "object"
+      },
+      "AlertView": {
+        "properties": {
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "credential_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Ref"
+          },
+          "dispatch_status": {
+            "additionalProperties": true,
+            "title": "Dispatch Status",
+            "type": "object"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "first_seen": {
+            "title": "First Seen",
+            "type": "string"
+          },
+          "hit_count": {
+            "title": "Hit Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_seen": {
+            "title": "Last Seen",
+            "type": "string"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rule_id",
+          "severity",
+          "title",
+          "agent_id",
+          "credential_ref",
+          "event_id",
+          "session_id",
+          "evidence",
+          "status",
+          "hit_count",
+          "first_seen",
+          "last_seen",
+          "dispatch_status"
+        ],
+        "title": "AlertView",
+        "type": "object"
+      },
+      "AuthorizationResult": {
+        "properties": {
+          "authorized": {
+            "title": "Authorized",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "authorized"
+        ],
+        "title": "AuthorizationResult",
+        "type": "object"
+      },
+      "BlastResource": {
+        "properties": {
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/CredentialLink"
+            },
+            "title": "Credentials",
+            "type": "array"
+          },
+          "event_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Event Ids",
+            "type": "array"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "resource_ref": {
+            "title": "Resource Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_ref",
+          "provider",
+          "kind",
+          "event_ids",
+          "credentials"
+        ],
+        "title": "BlastResource",
+        "type": "object"
+      },
+      "BootstrapRequest": {
+        "properties": {
+          "tenant_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Tenant Name",
+            "type": "string"
+          },
+          "user_ref": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "User Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_ref",
+          "tenant_name"
+        ],
+        "title": "BootstrapRequest",
+        "type": "object"
+      },
+      "BootstrapResult": {
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "ingest_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingest Token"
+          },
+          "scan_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Token"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "ingest_token",
+          "scan_token",
+          "created"
+        ],
+        "title": "BootstrapResult",
+        "type": "object"
+      },
+      "ChannelConfig": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "secret_configured": {
+            "default": false,
+            "title": "Secret Configured",
+            "type": "boolean"
+          },
+          "target": {
+            "default": "",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ChannelConfig",
+        "type": "object"
+      },
+      "ChannelUpdate": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "default": "",
+            "maxLength": 320,
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ChannelUpdate",
+        "type": "object"
+      },
+      "CredentialDetail": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingSummary"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "open_findings": {
+            "title": "Open Findings",
+            "type": "integer"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "permissions": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionReach"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "kind",
+          "fingerprint",
+          "owner",
+          "last_used_at",
+          "status",
+          "open_findings",
+          "created_at",
+          "permissions",
+          "findings"
+        ],
+        "title": "CredentialDetail",
+        "type": "object"
+      },
+      "CredentialLink": {
+        "properties": {
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "kind",
+          "fingerprint"
+        ],
+        "title": "CredentialLink",
+        "type": "object"
+      },
+      "CredentialSummary": {
+        "properties": {
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "open_findings": {
+            "title": "Open Findings",
+            "type": "integer"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "kind",
+          "fingerprint",
+          "owner",
+          "last_used_at",
+          "status",
+          "open_findings"
+        ],
+        "title": "CredentialSummary",
+        "type": "object"
+      },
+      "DemoResult": {
+        "properties": {
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "alert_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Alert Ids",
+            "type": "array"
+          },
+          "credential_id": {
+            "title": "Credential Id",
+            "type": "string"
+          },
+          "destructive_attempt": {
+            "title": "Destructive Attempt",
+            "type": "string"
+          },
+          "finding_id": {
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "sandboxed": {
+            "default": true,
+            "title": "Sandboxed",
+            "type": "boolean"
+          },
+          "scanner_warning": {
+            "title": "Scanner Warning",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "session_id",
+          "agent_id",
+          "credential_id",
+          "finding_id",
+          "alert_ids",
+          "scanner_warning",
+          "destructive_attempt"
+        ],
+        "title": "DemoResult",
+        "type": "object"
+      },
+      "EventType": {
+        "enum": [
+          "llm_call",
+          "tool_call",
+          "mcp_request",
+          "mcp_response",
+          "agent_step",
+          "http_call",
+          "file_op",
+          "db_op",
+          "credential_revocation"
+        ],
+        "title": "EventType",
+        "type": "string"
+      },
+      "ExportJSON": {
+        "properties": {
+          "findings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "findings"
+        ],
+        "title": "ExportJSON",
+        "type": "object"
+      },
+      "FindingDetail": {
+        "properties": {
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "finding_type": {
+            "title": "Finding Type",
+            "type": "string"
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fingerprint"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "remediation": {
+            "title": "Remediation",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "finding_type",
+          "severity",
+          "provider",
+          "fingerprint",
+          "owner",
+          "remediation",
+          "evidence"
+        ],
+        "title": "FindingDetail",
+        "type": "object"
+      },
+      "FindingSummary": {
+        "properties": {
+          "finding_type": {
+            "title": "Finding Type",
+            "type": "string"
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fingerprint"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "remediation": {
+            "title": "Remediation",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "finding_type",
+          "severity",
+          "provider",
+          "fingerprint",
+          "owner",
+          "remediation"
+        ],
+        "title": "FindingSummary",
+        "type": "object"
+      },
+      "GapMarker": {
+        "properties": {
+          "after_seq": {
+            "title": "After Seq",
+            "type": "integer"
+          },
+          "before_seq": {
+            "title": "Before Seq",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "gap",
+            "default": "gap",
+            "title": "Kind",
+            "type": "string"
+          },
+          "missing_count": {
+            "title": "Missing Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "after_seq",
+          "before_seq",
+          "missing_count"
+        ],
+        "title": "GapMarker",
+        "type": "object"
+      },
+      "GitHubInstallLink": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "install_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Install Url"
+          }
+        },
+        "required": [
+          "configured",
+          "install_url"
+        ],
+        "title": "GitHubInstallLink",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ImpactPreview": {
+        "properties": {
+          "agent_consumers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Agent Consumers",
+            "type": "array"
+          },
+          "cold": {
+            "title": "Cold",
+            "type": "boolean"
+          },
+          "credential_id": {
+            "title": "Credential Id",
+            "type": "string"
+          },
+          "events_last_30d": {
+            "title": "Events Last 30D",
+            "type": "integer"
+          },
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "guided_commands": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Guided Commands",
+            "type": "array"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_recorded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Recorded At"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "next_action": {
+            "title": "Next Action",
+            "type": "string"
+          },
+          "one_click": {
+            "title": "One Click",
+            "type": "boolean"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "reachable_resources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reachable Resources",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "write_credential_configured": {
+            "title": "Write Credential Configured",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "credential_id",
+          "provider",
+          "kind",
+          "fingerprint",
+          "status",
+          "cold",
+          "one_click",
+          "write_credential_configured",
+          "last_used_at",
+          "events_last_30d",
+          "last_recorded_at",
+          "agent_consumers",
+          "reachable_resources",
+          "next_action",
+          "guided_commands"
+        ],
+        "title": "ImpactPreview",
+        "type": "object"
+      },
+      "IncidentReport": {
+        "properties": {
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/ReportAlert"
+            },
+            "title": "Alerts",
+            "type": "array"
+          },
+          "anchor_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Ref"
+          },
+          "anchor_status": {
+            "title": "Anchor Status",
+            "type": "string"
+          },
+          "blast_radius": {
+            "items": {
+              "$ref": "#/components/schemas/ReportResource"
+            },
+            "title": "Blast Radius",
+            "type": "array"
+          },
+          "chain_head_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Head Hash"
+          },
+          "chain_head_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chain Head Seq"
+          },
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/ReportCredential"
+            },
+            "title": "Credentials",
+            "type": "array"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "markdown": {
+            "title": "Markdown",
+            "type": "string"
+          },
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionSummary"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "timeline": {
+            "items": {
+              "$ref": "#/components/schemas/ReportEvent"
+            },
+            "title": "Timeline",
+            "type": "array"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/VerifyResult"
+          }
+        },
+        "required": [
+          "report_id",
+          "generated_at",
+          "summary",
+          "session",
+          "credentials",
+          "timeline",
+          "blast_radius",
+          "alerts",
+          "verification",
+          "chain_head_hash",
+          "chain_head_seq",
+          "anchor_ref",
+          "anchor_status",
+          "markdown"
+        ],
+        "title": "IncidentReport",
+        "type": "object"
+      },
+      "IngestBatch": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/IngestEvent"
+            },
+            "maxItems": 100000,
+            "minItems": 1,
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "IngestBatch",
+        "type": "object"
+      },
+      "IngestEvent": {
+        "additionalProperties": false,
+        "description": "The producer-facing event shape submitted by the MCP tap, SDK, or OTLP normalizer. The collector derives the canonical event from it: tenant_id comes from the ingest token (never the body), payload is redacted/truncated/digested server-side, and chain fields are computed at ingest.",
+        "properties": {
+          "agent_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "credential_ref": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fingerprint reference; never a secret value",
+            "title": "Credential Ref"
+          },
+          "event_id": {
+            "description": "UUIDv7, assigned by the producer",
+            "format": "uuid",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/EventType",
+            "title": "IngestEventType"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/Operation",
+            "title": "IngestOperation"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "maxLength": 1048576,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Raw captured content. Redacted, truncated, digested, and split from the event server-side. Producers should pre-redact as defense in depth.",
+            "title": "Payload"
+          },
+          "resource_refs": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceRef"
+            },
+            "maxItems": 1024,
+            "title": "Resource Refs",
+            "type": "array"
+          },
+          "seq": {
+            "minimum": 0.0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "session_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Session Id",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source",
+            "title": "IngestSource"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "agent_id",
+          "session_id",
+          "seq",
+          "ts",
+          "source",
+          "event_type",
+          "operation",
+          "resource_refs"
+        ],
+        "title": "IngestEvent",
+        "type": "object"
+      },
+      "IngestResult": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "chain_head": {
+            "title": "Chain Head",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accepted",
+          "chain_head"
+        ],
+        "title": "IngestResult",
+        "type": "object"
+      },
+      "IntegrationStatus": {
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "credentials_found": {
+            "title": "Credentials Found",
+            "type": "integer"
+          },
+          "last_scan": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "connected",
+          "last_scan",
+          "credentials_found"
+        ],
+        "title": "IntegrationStatus",
+        "type": "object"
+      },
+      "LocalEvidence": {
+        "properties": {
+          "age_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Days"
+          },
+          "destructive_actions": {
+            "items": {
+              "maxLength": 512,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Destructive Actions",
+            "type": "array"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/LocalGrant"
+            },
+            "maxItems": 1000,
+            "title": "Grants",
+            "type": "array"
+          },
+          "never_used": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Never Used"
+          },
+          "reach_count": {
+            "default": 0,
+            "title": "Reach Count",
+            "type": "integer"
+          },
+          "reachable_resources": {
+            "items": {
+              "maxLength": 1024,
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Reachable Resources",
+            "type": "array"
+          }
+        },
+        "title": "LocalEvidence",
+        "type": "object"
+      },
+      "LocalFinding": {
+        "properties": {
+          "credential_kind": {
+            "default": "access_key",
+            "maxLength": 100,
+            "title": "Credential Kind",
+            "type": "string"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/LocalEvidence"
+          },
+          "finding_type": {
+            "enum": [
+              "orphaned_credential",
+              "over_privileged",
+              "stale_authorization",
+              "blast_radius"
+            ],
+            "title": "Finding Type",
+            "type": "string"
+          },
+          "fingerprint": {
+            "maxLength": 256,
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "natural_key": {
+            "maxLength": 512,
+            "title": "Natural Key",
+            "type": "string"
+          },
+          "owner": {
+            "maxLength": 512,
+            "title": "Owner",
+            "type": "string"
+          },
+          "provider": {
+            "const": "aws",
+            "default": "aws",
+            "title": "Provider",
+            "type": "string"
+          },
+          "remediation": {
+            "maxLength": 2000,
+            "title": "Remediation",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low",
+              "info"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "natural_key",
+          "finding_type",
+          "severity",
+          "fingerprint",
+          "owner",
+          "evidence",
+          "remediation"
+        ],
+        "title": "LocalFinding",
+        "type": "object"
+      },
+      "LocalGrant": {
+        "properties": {
+          "access": {
+            "enum": [
+              "read",
+              "write",
+              "admin"
+            ],
+            "title": "Access",
+            "type": "string"
+          },
+          "action": {
+            "maxLength": 512,
+            "title": "Action",
+            "type": "string"
+          },
+          "environment": {
+            "default": "unknown",
+            "enum": [
+              "prod",
+              "staging",
+              "dev",
+              "unknown"
+            ],
+            "title": "Environment",
+            "type": "string"
+          },
+          "kind": {
+            "maxLength": 100,
+            "title": "Kind",
+            "type": "string"
+          },
+          "resource": {
+            "maxLength": 1024,
+            "title": "Resource",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "resource",
+          "kind",
+          "access"
+        ],
+        "title": "LocalGrant",
+        "type": "object"
+      },
+      "LocalScanUpload": {
+        "properties": {
+          "api_calls": {
+            "minimum": 0.0,
+            "title": "Api Calls",
+            "type": "integer"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/LocalFinding"
+            },
+            "maxItems": 1000,
+            "title": "Findings",
+            "type": "array"
+          },
+          "scope": {
+            "maxLength": 512,
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "api_calls",
+          "findings"
+        ],
+        "title": "LocalScanUpload",
+        "type": "object"
+      },
+      "MemberView": {
+        "properties": {
+          "role": {
+            "default": "owner",
+            "title": "Role",
+            "type": "string"
+          },
+          "user_ref": {
+            "title": "User Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_ref"
+        ],
+        "title": "MemberView",
+        "type": "object"
+      },
+      "Operation": {
+        "additionalProperties": false,
+        "properties": {
+          "duration_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "name": {
+            "maxLength": 512,
+            "title": "Name",
+            "type": "string"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/Outcome",
+            "title": "IngestOutcome"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          }
+        },
+        "required": [
+          "name",
+          "outcome"
+        ],
+        "title": "Operation",
+        "type": "object"
+      },
+      "Outcome": {
+        "enum": [
+          "success",
+          "error",
+          "denied",
+          "unknown"
+        ],
+        "title": "Outcome",
+        "type": "string"
+      },
+      "Overview": {
+        "properties": {
+          "agents": {
+            "title": "Agents",
+            "type": "integer"
+          },
+          "credentials": {
+            "title": "Credentials",
+            "type": "integer"
+          },
+          "findings_by_severity": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Findings By Severity",
+            "type": "object"
+          },
+          "open_findings": {
+            "title": "Open Findings",
+            "type": "integer"
+          },
+          "providers_scanned": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Providers Scanned",
+            "type": "array"
+          },
+          "scary_number": {
+            "title": "Scary Number",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "findings_by_severity",
+          "open_findings",
+          "credentials",
+          "agents",
+          "providers_scanned",
+          "scary_number"
+        ],
+        "title": "Overview",
+        "type": "object"
+      },
+      "PermissionReach": {
+        "properties": {
+          "access": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "resource",
+          "access"
+        ],
+        "title": "PermissionReach",
+        "type": "object"
+      },
+      "ReportAlert": {
+        "properties": {
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "last_seen": {
+            "title": "Last Seen",
+            "type": "string"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "severity",
+          "title",
+          "event_id",
+          "status",
+          "last_seen"
+        ],
+        "title": "ReportAlert",
+        "type": "object"
+      },
+      "ReportCredential": {
+        "properties": {
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "reachable_resources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reachable Resources",
+            "type": "array"
+          },
+          "scopes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scopes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "kind",
+          "fingerprint",
+          "owner"
+        ],
+        "title": "ReportCredential",
+        "type": "object"
+      },
+      "ReportEvent": {
+        "properties": {
+          "credential_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Ref"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "missing_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing Count"
+          },
+          "operation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "ts": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ts"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ReportEvent",
+        "type": "object"
+      },
+      "ReportResource": {
+        "properties": {
+          "credential_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Credential Refs",
+            "type": "array"
+          },
+          "event_count": {
+            "title": "Event Count",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "resource_ref": {
+            "title": "Resource Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "kind",
+          "resource_ref",
+          "event_count",
+          "credential_refs"
+        ],
+        "title": "ReportResource",
+        "type": "object"
+      },
+      "ResourceRef": {
+        "maxLength": 1024,
+        "title": "ResourceRef",
+        "type": "string"
+      },
+      "RevokeRequest": {
+        "properties": {
+          "action": {
+            "enum": [
+              "deactivate",
+              "delete",
+              "revoke"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "confirmation": {
+            "title": "Confirmation",
+            "type": "string"
+          }
+        },
+        "required": [
+          "confirmation",
+          "action"
+        ],
+        "title": "RevokeRequest",
+        "type": "object"
+      },
+      "RevokeResult": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "credential_status": {
+            "title": "Credential Status",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "action",
+          "credential_status"
+        ],
+        "title": "RevokeResult",
+        "type": "object"
+      },
+      "SessionDetail": {
+        "properties": {
+          "blast_radius": {
+            "items": {
+              "$ref": "#/components/schemas/BlastResource"
+            },
+            "title": "Blast Radius",
+            "type": "array"
+          },
+          "read_only": {
+            "default": false,
+            "title": "Read Only",
+            "type": "boolean"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionSummary"
+          },
+          "timeline": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TimelineEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/GapMarker"
+                }
+              ]
+            },
+            "title": "Timeline",
+            "type": "array"
+          },
+          "verification": {
+            "$ref": "#/components/schemas/VerifyResult"
+          }
+        },
+        "required": [
+          "session",
+          "timeline",
+          "blast_radius",
+          "verification"
+        ],
+        "title": "SessionDetail",
+        "type": "object"
+      },
+      "SessionSummary": {
+        "properties": {
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "ended_at": {
+            "title": "Ended At",
+            "type": "string"
+          },
+          "error_count": {
+            "title": "Error Count",
+            "type": "integer"
+          },
+          "event_count": {
+            "title": "Event Count",
+            "type": "integer"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "agent_id",
+          "started_at",
+          "ended_at",
+          "event_count",
+          "error_count"
+        ],
+        "title": "SessionSummary",
+        "type": "object"
+      },
+      "SettingsUpdate": {
+        "properties": {
+          "capture_payloads": {
+            "title": "Capture Payloads",
+            "type": "boolean"
+          },
+          "retention_days": {
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Retention Days",
+            "type": "integer"
+          },
+          "tenant_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Tenant Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_name",
+          "retention_days",
+          "capture_payloads"
+        ],
+        "title": "SettingsUpdate",
+        "type": "object"
+      },
+      "SettingsView": {
+        "properties": {
+          "capture_payloads": {
+            "title": "Capture Payloads",
+            "type": "boolean"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MemberView"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "redaction_rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Redaction Rules",
+            "type": "array"
+          },
+          "retention_days": {
+            "title": "Retention Days",
+            "type": "integer"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "tenant_name": {
+            "title": "Tenant Name",
+            "type": "string"
+          },
+          "tokens": {
+            "items": {
+              "$ref": "#/components/schemas/TokenView"
+            },
+            "title": "Tokens",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "tenant_name",
+          "created_at",
+          "members",
+          "tokens",
+          "retention_days",
+          "capture_payloads",
+          "redaction_rules"
+        ],
+        "title": "SettingsView",
+        "type": "object"
+      },
+      "ShareCreated": {
+        "properties": {
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "share_path": {
+            "title": "Share Path",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "share_path",
+          "expires_at"
+        ],
+        "title": "ShareCreated",
+        "type": "object"
+      },
+      "ShareRequest": {
+        "properties": {
+          "expires_in_hours": {
+            "default": 72,
+            "maximum": 720.0,
+            "minimum": 1.0,
+            "title": "Expires In Hours",
+            "type": "integer"
+          }
+        },
+        "title": "ShareRequest",
+        "type": "object"
+      },
+      "Source": {
+        "enum": [
+          "mcp_tap",
+          "sdk_langgraph",
+          "otel_ingest",
+          "admin_api"
+        ],
+        "title": "Source",
+        "type": "string"
+      },
+      "TimelineEvent": {
+        "properties": {
+          "credential": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CredentialLink"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "credential_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Ref"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "title": "Event Type",
+            "type": "string"
+          },
+          "kind": {
+            "const": "event",
+            "default": "event",
+            "title": "Kind",
+            "type": "string"
+          },
+          "operation": {
+            "title": "Operation",
+            "type": "string"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "payload": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload"
+          },
+          "payload_truncated": {
+            "title": "Payload Truncated",
+            "type": "boolean"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "redactions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Redactions",
+            "type": "array"
+          },
+          "resource_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Resource Refs",
+            "type": "array"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "session_id",
+          "seq",
+          "ts",
+          "source",
+          "event_type",
+          "operation",
+          "provider",
+          "target",
+          "outcome",
+          "duration_ms",
+          "credential",
+          "credential_ref",
+          "resource_refs",
+          "payload",
+          "payload_truncated",
+          "redactions"
+        ],
+        "title": "TimelineEvent",
+        "type": "object"
+      },
+      "TokenCreate": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "recording",
+              "local_scan"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "TokenCreate",
+        "type": "object"
+      },
+      "TokenCreated": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "token"
+        ],
+        "title": "TokenCreated",
+        "type": "object"
+      },
+      "TokenView": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "recording",
+              "local_scan"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "created_at",
+          "revoked_at"
+        ],
+        "title": "TokenView",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "VerifyResult": {
+        "properties": {
+          "anchor_head_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Head Seq"
+          },
+          "anchor_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Ref"
+          },
+          "events_checked": {
+            "title": "Events Checked",
+            "type": "integer"
+          },
+          "first_divergent_event_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Divergent Event Id"
+          },
+          "head_matches_checkpoint": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Head Matches Checkpoint"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "verification_mode": {
+            "default": "full",
+            "enum": [
+              "full",
+              "range",
+              "anchored_suffix",
+              "anchor_failed"
+            ],
+            "title": "Verification Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "valid",
+          "events_checked"
+        ],
+        "title": "VerifyResult",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "AgentBlackBox API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "description": "Liveness only: the process can serve requests.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthz Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthz"
+      }
+    },
+    "/readyz": {
+      "get": {
+        "description": "Readiness: every durable dependency needed by normal traffic responds.",
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readyz"
+      }
+    },
+    "/v1/alerts": {
+      "get": {
+        "operationId": "alert_list_v1_alerts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "default": "open",
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AlertView"
+                  },
+                  "title": "Response Alert List V1 Alerts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Alert List"
+      }
+    },
+    "/v1/alerts/channels": {
+      "get": {
+        "operationId": "channels_v1_alerts_channels_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelConfig"
+                  },
+                  "title": "Response Channels V1 Alerts Channels Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Channels"
+      },
+      "put": {
+        "operationId": "update_channel_v1_alerts_channels_put",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Channel"
+      }
+    },
+    "/v1/alerts/evaluate": {
+      "post": {
+        "operationId": "evaluate_all_v1_alerts_evaluate_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Evaluate All V1 Alerts Evaluate Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Evaluate All"
+      }
+    },
+    "/v1/alerts/{alert_id}/acknowledge": {
+      "post": {
+        "operationId": "acknowledge_v1_alerts__alert_id__acknowledge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "alert_id",
+            "required": true,
+            "schema": {
+              "title": "Alert Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Acknowledge V1 Alerts  Alert Id  Acknowledge Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Acknowledge"
+      }
+    },
+    "/v1/chain/verify": {
+      "get": {
+        "operationId": "verify_v1_chain_verify_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_chain_seq",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "title": "From Chain Seq",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_chain_seq",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Chain Seq"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify"
+      }
+    },
+    "/v1/dashboard/credentials": {
+      "get": {
+        "operationId": "credentials_list_v1_dashboard_credentials_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CredentialSummary"
+                  },
+                  "title": "Response Credentials List V1 Dashboard Credentials Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Credentials List"
+      }
+    },
+    "/v1/dashboard/credentials/{credential_id}": {
+      "get": {
+        "operationId": "credential_detail_v1_dashboard_credentials__credential_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "title": "Credential Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Credential Detail"
+      }
+    },
+    "/v1/dashboard/findings": {
+      "get": {
+        "operationId": "findings_list_v1_dashboard_findings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "finding_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Finding Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FindingSummary"
+                  },
+                  "title": "Response Findings List V1 Dashboard Findings Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Findings List"
+      }
+    },
+    "/v1/dashboard/findings.csv": {
+      "get": {
+        "operationId": "findings_csv_v1_dashboard_findings_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Findings Csv"
+      }
+    },
+    "/v1/dashboard/findings.json": {
+      "get": {
+        "operationId": "findings_json_v1_dashboard_findings_json_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportJSON"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Findings Json"
+      }
+    },
+    "/v1/dashboard/findings.md": {
+      "get": {
+        "operationId": "findings_markdown_v1_dashboard_findings_md_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Findings Markdown"
+      }
+    },
+    "/v1/dashboard/findings/{finding_id}": {
+      "get": {
+        "operationId": "finding_detail_v1_dashboard_findings__finding_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "finding_id",
+            "required": true,
+            "schema": {
+              "title": "Finding Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Finding Detail"
+      }
+    },
+    "/v1/dashboard/integrations": {
+      "get": {
+        "operationId": "integrations_v1_dashboard_integrations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IntegrationStatus"
+                  },
+                  "title": "Response Integrations V1 Dashboard Integrations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Integrations"
+      }
+    },
+    "/v1/dashboard/overview": {
+      "get": {
+        "operationId": "overview_v1_dashboard_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Overview"
+      }
+    },
+    "/v1/demo/run": {
+      "post": {
+        "operationId": "run_demo_v1_demo_run_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Demo"
+      }
+    },
+    "/v1/evidence/tenant": {
+      "get": {
+        "description": "Stream the complete tenant chain through its latest immutable anchor.",
+        "operationId": "export_tenant_evidence_v1_evidence_tenant_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Tenant Evidence"
+      }
+    },
+    "/v1/ingest": {
+      "post": {
+        "operationId": "ingest_v1_ingest_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IngestBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ingest"
+      }
+    },
+    "/v1/integrations/github/install-url": {
+      "get": {
+        "operationId": "github_install_url_v1_integrations_github_install_url_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitHubInstallLink"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Github Install Url"
+      }
+    },
+    "/v1/onboarding/authorize": {
+      "get": {
+        "operationId": "authorize_v1_onboarding_authorize_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "user_ref",
+            "required": true,
+            "schema": {
+              "title": "User Ref",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthorizationResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authorize"
+      }
+    },
+    "/v1/onboarding/bootstrap": {
+      "post": {
+        "operationId": "bootstrap_v1_onboarding_bootstrap_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BootstrapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bootstrap"
+      }
+    },
+    "/v1/otlp/traces": {
+      "post": {
+        "operationId": "otlp_traces_v1_otlp_traces_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Otlp Traces"
+      }
+    },
+    "/v1/replay/agents": {
+      "get": {
+        "operationId": "agents_v1_replay_agents_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AgentSummary"
+                  },
+                  "title": "Response Agents V1 Replay Agents Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Agents"
+      }
+    },
+    "/v1/replay/agents/{agent_id}/sessions": {
+      "get": {
+        "operationId": "agent_sessions_v1_replay_agents__agent_id__sessions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SessionSummary"
+                  },
+                  "title": "Response Agent Sessions V1 Replay Agents  Agent Id  Sessions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Agent Sessions"
+      }
+    },
+    "/v1/replay/credentials/{credential_id}/events": {
+      "get": {
+        "operationId": "credential_events_v1_replay_credentials__credential_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "title": "Credential Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TimelineEvent"
+                  },
+                  "title": "Response Credential Events V1 Replay Credentials  Credential Id  Events Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Credential Events"
+      }
+    },
+    "/v1/replay/sessions/{session_id}": {
+      "get": {
+        "operationId": "session_detail_v1_replay_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Session Detail"
+      }
+    },
+    "/v1/replay/sessions/{session_id}/blast-radius.csv": {
+      "get": {
+        "operationId": "blast_radius_csv_v1_replay_sessions__session_id__blast_radius_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Blast Radius Csv"
+      }
+    },
+    "/v1/replay/sessions/{session_id}/blast-radius.json": {
+      "get": {
+        "operationId": "blast_radius_json_v1_replay_sessions__session_id__blast_radius_json_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BlastResource"
+                  },
+                  "title": "Response Blast Radius Json V1 Replay Sessions  Session Id  Blast Radius Json Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Blast Radius Json"
+      }
+    },
+    "/v1/replay/sessions/{session_id}/share": {
+      "post": {
+        "operationId": "create_share_v1_replay_sessions__session_id__share_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShareCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Share"
+      }
+    },
+    "/v1/replay/shared/{token}": {
+      "get": {
+        "operationId": "shared_session_v1_replay_shared__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Shared Session"
+      }
+    },
+    "/v1/reports/sessions/{session_id}": {
+      "get": {
+        "operationId": "report_json_v1_reports_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Json"
+      }
+    },
+    "/v1/reports/sessions/{session_id}.md": {
+      "get": {
+        "operationId": "report_markdown_v1_reports_sessions__session_id__md_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Markdown"
+      }
+    },
+    "/v1/revocation/{credential_id}": {
+      "post": {
+        "operationId": "revoke_v1_revocation__credential_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "title": "Credential Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevokeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke"
+      }
+    },
+    "/v1/revocation/{credential_id}/impact": {
+      "get": {
+        "operationId": "impact_v1_revocation__credential_id__impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "title": "Credential Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImpactPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Impact"
+      }
+    },
+    "/v1/scans/local": {
+      "post": {
+        "operationId": "upload_local_scan_v1_scans_local_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocalScanUpload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "title": "Response Upload Local Scan V1 Scans Local Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Local Scan"
+      }
+    },
+    "/v1/settings": {
+      "get": {
+        "operationId": "get_settings_v1_settings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Settings"
+      },
+      "put": {
+        "operationId": "update_settings_v1_settings_put",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Settings"
+      }
+    },
+    "/v1/settings/tokens": {
+      "post": {
+        "operationId": "create_token_v1_settings_tokens_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Token"
+      }
+    },
+    "/v1/settings/tokens/{kind}/{token_id}/revoke": {
+      "post": {
+        "operationId": "revoke_token_v1_settings_tokens__kind___token_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "recording",
+                "local_scan"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "token_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Token Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Revoke Token V1 Settings Tokens  Kind   Token Id  Revoke Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Token"
+      }
+    }
+  }
+}

@@ -27,6 +27,8 @@ jobs:
         run: uv run mypy
       - name: Schema codegen drift check
         run: uv run python packages/schemas/scripts/codegen.py --check
+      - name: API contract drift check
+        run: uv run python packages/schemas/scripts/api_contracts.py --check
       - name: Tests
         run: uv run pytest -q
 
