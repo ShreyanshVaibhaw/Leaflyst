@@ -1116,11 +1116,31 @@
           "chain_head": {
             "title": "Chain Head",
             "type": "string"
+          },
+          "limit_state": {
+            "enum": [
+              "unlimited",
+              "within_limit",
+              "degraded"
+            ],
+            "title": "Limit State",
+            "type": "string"
+          },
+          "over_limit_payload_events": {
+            "title": "Over Limit Payload Events",
+            "type": "integer"
+          },
+          "payloads_omitted_by_limit": {
+            "title": "Payloads Omitted By Limit",
+            "type": "integer"
           }
         },
         "required": [
           "accepted",
-          "chain_head"
+          "chain_head",
+          "limit_state",
+          "over_limit_payload_events",
+          "payloads_omitted_by_limit"
         ],
         "title": "IngestResult",
         "type": "object"
@@ -1971,6 +1991,10 @@
             "title": "Members",
             "type": "array"
           },
+          "plan_key": {
+            "title": "Plan Key",
+            "type": "string"
+          },
           "redaction_rules": {
             "items": {
               "type": "string"
@@ -1996,6 +2020,9 @@
             },
             "title": "Tokens",
             "type": "array"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/UsageView"
           }
         },
         "required": [
@@ -2006,7 +2033,9 @@
           "tokens",
           "retention_days",
           "capture_payloads",
-          "redaction_rules"
+          "redaction_rules",
+          "plan_key",
+          "usage"
         ],
         "title": "SettingsView",
         "type": "object"
@@ -2257,9 +2286,31 @@
       },
       "TokenView": {
         "properties": {
+          "captured_payload_events_today": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captured Payload Events Today"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
+          },
+          "daily_payload_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Payload Limit"
           },
           "id": {
             "title": "Id",
@@ -2276,6 +2327,22 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "payload_allowance_state": {
+            "anyOf": [
+              {
+                "enum": [
+                  "unlimited",
+                  "available",
+                  "exhausted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payload Allowance State"
           },
           "revoked_at": {
             "anyOf": [
@@ -2294,9 +2361,64 @@
           "kind",
           "label",
           "created_at",
-          "revoked_at"
+          "revoked_at",
+          "captured_payload_events_today",
+          "daily_payload_limit",
+          "payload_allowance_state"
         ],
         "title": "TokenView",
+        "type": "object"
+      },
+      "UsageView": {
+        "properties": {
+          "daily_event_plan_threshold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Event Plan Threshold"
+          },
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "events": {
+            "title": "Events",
+            "type": "integer"
+          },
+          "plan_state": {
+            "enum": [
+              "unlimited",
+              "within_plan",
+              "over_plan"
+            ],
+            "title": "Plan State",
+            "type": "string"
+          },
+          "remaining_plan_events": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Plan Events"
+          }
+        },
+        "required": [
+          "day",
+          "events",
+          "daily_event_plan_threshold",
+          "remaining_plan_events",
+          "plan_state"
+        ],
+        "title": "UsageView",
         "type": "object"
       },
       "ValidationError": {

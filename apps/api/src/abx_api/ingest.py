@@ -23,8 +23,9 @@ from abx_schemas import IngestEvent
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from abx_api.auth import tenant_from_token
+from abx_api.auth import IngestIdentity, ingest_identity_from_token
 from abx_api.chain import GENESIS_HASH, compute_event_hash, event_to_row, format_ts
+from abx_api.metering import LimitState, decide_capture
 from abx_api.redaction import redact_and_truncate
 from abx_api.settings import settings
 from abx_api.store import EVENT_COLUMNS, ch_client, pg_pool, put_payload
@@ -40,6 +41,9 @@ class IngestBatch(BaseModel):
 class IngestResult(BaseModel):
     accepted: int
     chain_head: str
+    limit_state: LimitState
+    over_limit_payload_events: int
+    payloads_omitted_by_limit: int
 
 
 class BatchTooLargeError(ValueError):
@@ -48,15 +52,24 @@ class BatchTooLargeError(ValueError):
 
 @router.post("/v1/ingest", response_model=IngestResult)
 def ingest(
-    batch: IngestBatch, tenant_id: Annotated[str, Depends(tenant_from_token)]
+    batch: IngestBatch,
+    identity: Annotated[IngestIdentity, Depends(ingest_identity_from_token)],
 ) -> IngestResult:
     try:
-        return ingest_events(tenant_id, list(batch.events))
+        return ingest_events(
+            identity.tenant_id,
+            list(batch.events),
+            ingest_token_id=identity.token_id,
+        )
     except BatchTooLargeError as exc:
         raise HTTPException(status_code=413, detail="batch too large") from exc
 
 
-def ingest_events(tenant_id: str, events: list[IngestEvent]) -> IngestResult:
+def ingest_events(
+    tenant_id: str,
+    events: list[IngestEvent],
+    ingest_token_id: str | None = None,
+) -> IngestResult:
     """Persist canonical events without depending on FastAPI transport models."""
     if not events:
         raise ValueError("at least one event is required")
@@ -93,10 +106,39 @@ def ingest_events(tenant_id: str, events: list[IngestEvent]) -> IngestResult:
             (tenant_id,),
         ).fetchone()
         capture_payloads = bool(tenant_setting[0]) if tenant_setting else True
+        plan_row = conn.execute(
+            "SELECT p.per_token_daily_payload_limit FROM tenants t "
+            "LEFT JOIN tenant_plans p ON p.tenant_id=t.id "
+            "WHERE t.id=%s",
+            (tenant_id,),
+        ).fetchone()
+        assert plan_row is not None
+        daily_event_limit = int(plan_row[0]) if plan_row[0] is not None else None
+        current_captured_payloads = 0
+        if ingest_token_id is not None:
+            token_usage = conn.execute(
+                "SELECT captured_payload_events FROM metering_token_daily "
+                "WHERE tenant_id=%s AND token_id=%s AND day=CURRENT_DATE",
+                (tenant_id, ingest_token_id),
+            ).fetchone()
+            current_captured_payloads = int(token_usage[0]) if token_usage else 0
+        batch_payloads = sum(event.payload is not None for event in events)
+        capture = decide_capture(
+            current_captured_payloads,
+            batch_payloads,
+            daily_event_limit if ingest_token_id is not None and capture_payloads else None,
+        )
 
         # Redact + store payloads concurrently (S3 puts are the per-event
         # bottleneck), then chain sequentially over the results in order.
-        prepared = prepare_events(tenant_id, events, capture_payloads)
+        prepared = prepare_events(
+            tenant_id,
+            events,
+            capture_payloads,
+            full_fidelity_payloads=capture.full_fidelity_payloads,
+        )
+        payloads_omitted_by_limit = capture.over_limit_payloads
+        captured_payloads = sum(payload_ref is not None for _, _, payload_ref, _, _ in prepared)
         rows: list[list[Any]] = []
         for ie, digest, payload_ref, redactions, truncated in prepared:
             event = finalize_event(
@@ -121,6 +163,15 @@ def ingest_events(tenant_id: str, events: list[IngestEvent]) -> IngestResult:
             "ON CONFLICT (tenant_id, day) DO UPDATE SET events = metering_daily.events + %s",
             (tenant_id, len(rows), len(rows)),
         )
+        if ingest_token_id is not None and captured_payloads:
+            conn.execute(
+                "INSERT INTO metering_token_daily "
+                "(tenant_id,token_id,day,captured_payload_events) "
+                "VALUES (%s,%s,CURRENT_DATE,%s) ON CONFLICT (tenant_id,token_id,day) "
+                "DO UPDATE SET captured_payload_events="
+                "metering_token_daily.captured_payload_events+EXCLUDED.captured_payload_events",
+                (tenant_id, ingest_token_id, captured_payloads),
+            )
 
     try:
         from abx_rules.queue import enqueue_alerts
@@ -128,7 +179,13 @@ def ingest_events(tenant_id: str, events: list[IngestEvent]) -> IngestResult:
         enqueue_alerts(tenant_id, [str(event.event_id) for event in events])
     except Exception:
         logger.exception("anomaly evaluation degraded for tenant %s", tenant_id)
-    return IngestResult(accepted=len(rows), chain_head=prev_hash)
+    return IngestResult(
+        accepted=len(rows),
+        chain_head=prev_hash,
+        limit_state=capture.limit_state,
+        over_limit_payload_events=capture.over_limit_payloads,
+        payloads_omitted_by_limit=payloads_omitted_by_limit,
+    )
 
 
 # (event, digest, payload_ref, redactions, truncated)
@@ -147,13 +204,32 @@ def _prepare_one(tenant_id: str, ie: IngestEvent, capture_payloads: bool) -> _Pr
 
 
 def prepare_events(
-    tenant_id: str, events: list[IngestEvent], capture_payloads: bool = True
+    tenant_id: str,
+    events: list[IngestEvent],
+    capture_payloads: bool = True,
+    full_fidelity_payloads: int | None = None,
 ) -> list[_Prepared]:
     """Prepare all events, preserving order. S3 puts run concurrently."""
-    if not any(e.payload for e in events):
-        return [_prepare_one(tenant_id, e, capture_payloads) for e in events]
+    capture_slots = len(events) if full_fidelity_payloads is None else full_fidelity_payloads
+    capture_flags: list[bool] = []
+    for event in events:
+        should_capture = capture_payloads and event.payload is not None and capture_slots > 0
+        capture_flags.append(should_capture)
+        if should_capture:
+            capture_slots -= 1
+    event_flags = zip(events, capture_flags, strict=True)
+    if not any(event.payload is not None and flag for event, flag in event_flags):
+        return [
+            _prepare_one(tenant_id, event, flag)
+            for event, flag in zip(events, capture_flags, strict=True)
+        ]
     with ThreadPoolExecutor(max_workers=16) as pool:
-        return list(pool.map(lambda e: _prepare_one(tenant_id, e, capture_payloads), events))
+        return list(
+            pool.map(
+                lambda item: _prepare_one(tenant_id, item[0], item[1]),
+                zip(events, capture_flags, strict=True),
+            )
+        )
 
 
 def finalize_event(

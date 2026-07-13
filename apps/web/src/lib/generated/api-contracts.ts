@@ -46,7 +46,7 @@ export type IngestBatch = { events: Array<IngestEvent> };
 
 export type IngestEvent = { agent_id: string; credential_ref?: string | null; event_id: string; event_type: EventType; operation: Operation; payload?: string | null; resource_refs: Array<ResourceRef>; seq: number; session_id: string; source: Source; ts: string };
 
-export type IngestResult = { accepted: number; chain_head: string };
+export type IngestResult = { accepted: number; chain_head: string; limit_state: "unlimited" | "within_limit" | "degraded"; over_limit_payload_events: number; payloads_omitted_by_limit: number };
 
 export type IntegrationStatus = { account?: string | null; connected: boolean; credentials_found: number; last_scan: string | null; provider: string };
 
@@ -88,7 +88,7 @@ export type SessionSummary = { agent_id: string; ended_at: string; error_count: 
 
 export type SettingsUpdate = { capture_payloads: boolean; retention_days: number; tenant_name: string };
 
-export type SettingsView = { capture_payloads: boolean; created_at: string; members: Array<MemberView>; redaction_rules: Array<string>; retention_days: number; tenant_id: string; tenant_name: string; tokens: Array<TokenView> };
+export type SettingsView = { capture_payloads: boolean; created_at: string; members: Array<MemberView>; plan_key: string; redaction_rules: Array<string>; retention_days: number; tenant_id: string; tenant_name: string; tokens: Array<TokenView>; usage: UsageView };
 
 export type ShareCreated = { expires_at: string; share_path: string; token: string };
 
@@ -102,7 +102,9 @@ export type TokenCreate = { kind: "recording" | "local_scan"; label: string };
 
 export type TokenCreated = { id: string; kind: string; label: string; token: string };
 
-export type TokenView = { created_at: string; id: string; kind: "recording" | "local_scan"; label: string; revoked_at: string | null };
+export type TokenView = { captured_payload_events_today: number | null; created_at: string; daily_payload_limit: number | null; id: string; kind: "recording" | "local_scan"; label: string; payload_allowance_state: "unlimited" | "available" | "exhausted" | null; revoked_at: string | null };
+
+export type UsageView = { daily_event_plan_threshold: number | null; day: string; events: number; plan_state: "unlimited" | "within_plan" | "over_plan"; remaining_plan_events: number | null };
 
 export type ValidationError = { ctx?: Record<string, unknown>; input?: unknown; loc: Array<string | number>; msg: string; type: string };
 

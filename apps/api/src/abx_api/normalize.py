@@ -26,7 +26,7 @@ from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
 from opentelemetry.proto.common.v1.common_pb2 import AnyValue
 from opentelemetry.proto.trace.v1.trace_pb2 import Span
 
-from abx_api.auth import tenant_from_token
+from abx_api.auth import IngestIdentity, ingest_identity_from_token
 from abx_api.ingest import ingest_events
 from abx_api.redaction import redact
 from abx_api.store import pg_pool
@@ -87,7 +87,7 @@ class NormalizedSpan:
 @router.post("/v1/traces", include_in_schema=False)
 async def otlp_traces(
     request: Request,
-    tenant_id: Annotated[str, Depends(tenant_from_token)],
+    identity: Annotated[IngestIdentity, Depends(ingest_identity_from_token)],
 ) -> Response:
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip()
     if content_type != "application/x-protobuf":
@@ -99,14 +99,16 @@ async def otlp_traces(
 
     events = normalize_export(export_request)
     if events:
-        events = allocate_session_sequences(tenant_id, events)
-        ingest_events(tenant_id, events)
+        events = allocate_session_sequences(identity.tenant_id, events)
+        ingest_events(identity.tenant_id, events, ingest_token_id=identity.token_id)
         try:
-            link_observed_credentials(tenant_id, events)
+            link_observed_credentials(identity.tenant_id, events)
         except Exception:
             # Graph enrichment must never turn accepted telemetry into exporter
             # retries and duplicate event writes.
-            logger.exception("credential graph enrichment failed for tenant %s", tenant_id)
+            logger.exception(
+                "credential graph enrichment failed for tenant %s", identity.tenant_id
+            )
 
     response = ExportTraceServiceResponse().SerializeToString()
     return Response(content=response, media_type="application/x-protobuf")

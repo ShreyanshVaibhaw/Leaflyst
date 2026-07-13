@@ -63,6 +63,19 @@ Open `/onboarding` to create a workspace and receive a write-only ingest token.
 path and [`docs/integrations.md`](docs/integrations.md) for tap, SDK, OTLP,
 AWS, local-scanner, and GitHub setup.
 
+Daily recording limits are assigned from the operator environment until a
+payment control plane is connected:
+
+```text
+uv run python -m abx_api.admin set-plan <tenant-id> <plan-key> <daily-events|unlimited> [per-token-payloads|unlimited]
+```
+
+Crossing a configured limit does not reject recording. Events remain redacted,
+digested, chained, and indexed. Aggregate tenant/day counts drive plan reporting;
+the separate optional argument controls each write-only token's independent
+payload allowance. An exhausted token switches to metadata-only without degrading
+other recorders.
+
 For the GitHub App connection flow, set `ABX_GITHUB_APP_SLUG`,
 `ABX_GITHUB_APP_ID`, `ABX_GITHUB_PRIVATE_KEY`, and a production
 `ABX_GITHUB_STATE_SECRET`. Configure the App setup URL as
