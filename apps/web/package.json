@@ -8,12 +8,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "node e2e/public-smoke.mjs"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.5.16",
-    "next": "16.2.10",
-    "playwright": "1.58.0",
+    "next": "16.2.11",
+    "playwright": "1.60.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -23,9 +24,16 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.2.11",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^3.2.4"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss@8.4.31": "8.5.18",
+      "postcss@8.5.16": "8.5.18",
+      "sharp@0.34.5": "0.35.0"
+    }
   }
 }

@@ -55,10 +55,6 @@ def ingest_identity_from_token(authorization: str = Header(default="")) -> Inges
     return IngestIdentity(tenant_id=str(row[0]), token_id=str(row[1]))
 
 
-def tenant_from_token(authorization: str = Header(default="")) -> str:
-    return ingest_identity_from_token(authorization).tenant_id
-
-
 def tenant_from_scan_token(authorization: str = Header(default="")) -> str:
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="missing bearer token")

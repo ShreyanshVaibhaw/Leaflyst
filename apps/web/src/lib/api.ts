@@ -1,36 +1,38 @@
 import "server-only";
 
-import type {
-  AgentSummary,
-  AlertView,
-  BlastResource,
-  ChannelConfig,
-  CredentialDetail,
-  CredentialLink,
-  CredentialSummary,
-  FindingDetail,
-  FindingSummary,
-  GapMarker,
-  GitHubInstallLink,
-  ImpactPreview,
-  IncidentReport,
-  IntegrationStatus,
-  Overview,
-  PermissionReach,
-  SessionDetail,
-  SessionSummary,
-  SettingsView,
-  TimelineEvent,
-  VerifyResult,
-} from "@/lib/generated/api-contracts";
+import type { components } from "@/lib/generated/api-contracts";
 import { getTenantId } from "@/lib/tenant";
 
-export type { BlastResource, CredentialLink, GapMarker, ImpactPreview, IncidentReport, Overview, SessionDetail, SessionSummary, TimelineEvent };
+type Schemas = components["schemas"];
+type AgentSummary = Schemas["AgentSummary"];
+type AlertView = Schemas["AlertView"];
+export type BlastResource = Schemas["BlastResource"];
+type ChannelConfig = Schemas["ChannelConfig"];
+type CredentialDetail = Schemas["CredentialDetail"];
+export type CredentialLink = Schemas["CredentialLink"];
+type CredentialSummary = Schemas["CredentialSummary"];
+type FindingDetail = Schemas["FindingDetail"];
+type FindingSummary = Schemas["FindingSummary"];
+export type GapMarker = Schemas["GapMarker"];
+type GitHubInstallLink = Schemas["GitHubInstallLink"];
+type GcpConnectInfo = Schemas["GcpConnectInfo"];
+export type ImpactPreview = Schemas["ImpactPreview"];
+export type IncidentReport = Schemas["IncidentReport"];
+type IntegrationStatus = Schemas["IntegrationStatus"];
+export type Overview = Schemas["Overview"];
+type PermissionReach = Schemas["PermissionReach"];
+export type SessionDetail = Schemas["SessionDetail"];
+export type SessionSummary = Schemas["SessionSummary"];
+type SettingsView = Schemas["SettingsView"];
+export type TimelineEvent = Schemas["TimelineEvent"];
+type VerifyResult = Schemas["VerifyResult"];
+
 export type Finding = FindingSummary & Partial<Pick<FindingDetail, "evidence">>;
 export type Credential = CredentialSummary &
   Partial<Pick<CredentialDetail, "created_at" | "findings" | "permissions">>;
 export type Integration = IntegrationStatus;
 export type InstallLink = GitHubInstallLink;
+export type GcpConnectionInfo = GcpConnectInfo;
 export type Agent = AgentSummary & { credentials: CredentialLink[] };
 export type ChainVerification = VerifyResult;
 export type Alert = AlertView;
@@ -56,7 +58,7 @@ export async function apiGet<T>(path: string, params: Record<string, string> = {
     cache: "no-store",
   });
   if (!response.ok) {
-    throw new Error(`AgentBlackBox API returned ${response.status}`);
+    throw new Error(`Leaflyst API returned ${response.status}`);
   }
   return (await response.json()) as T;
 }
@@ -67,7 +69,7 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const url = new URL(path, apiUrl);
   url.searchParams.set("tenant_id", tenantId);
   const response = await fetch(url, { method: "POST", headers: { "X-ABX-Admin-Key": adminKey, "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
-  if (!response.ok) throw new Error(`AgentBlackBox API returned ${response.status}`);
+  if (!response.ok) throw new Error(`Leaflyst API returned ${response.status}`);
   return (await response.json()) as T;
 }
 
@@ -77,7 +79,7 @@ export async function apiPut<T>(path: string, body: unknown): Promise<T> {
   const url = new URL(path, apiUrl);
   url.searchParams.set("tenant_id", tenantId);
   const response = await fetch(url, { method: "PUT", headers: { "X-ABX-Admin-Key": adminKey, "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
-  if (!response.ok) throw new Error(`AgentBlackBox API returned ${response.status}`);
+  if (!response.ok) throw new Error(`Leaflyst API returned ${response.status}`);
   return (await response.json()) as T;
 }
 
@@ -88,7 +90,7 @@ export async function adminApiPost<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error(`AgentBlackBox API returned ${response.status}`);
+  if (!response.ok) throw new Error(`Leaflyst API returned ${response.status}`);
   return (await response.json()) as T;
 }
 

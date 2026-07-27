@@ -1,4 +1,4 @@
-"""OTLP trace normalization into canonical AgentBlackBox ingest events.
+"""OTLP trace normalization into canonical Leaflyst ingest events.
 
 This is the ONLY ingest module allowed to contain raw ``gen_ai.*`` strings.
 It accepts current and legacy OTel GenAI attributes plus OpenLLMetry and

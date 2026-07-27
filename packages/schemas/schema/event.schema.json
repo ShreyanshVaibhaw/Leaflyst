@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentblackbox.dev/schemas/event.schema.json",
+  "$id": "https://leaflyst.dev/schemas/event.schema.json",
   "title": "CanonicalEvent",
   "description": "Every captured agent action, from any source, normalized into this shape before ingest. event_hash covers all fields except itself, including payload_digest but never the payload body (erasure-compatible chain).",
   "x-abx-hashed-fields": [

@@ -277,7 +277,7 @@ def _upsert_and_maybe_dispatch(tenant_id: str, event: dict[str, Any], candidate:
 
 def dispatch_alert(tenant_id: str, alert_id: str, title: str, session_id: str) -> dict[str, str]:
     link = f"{settings.web_url.rstrip('/')}/sessions/{session_id}"
-    message = f"AgentBlackBox: {title}\n{link}"
+    message = f"Leaflyst: {title}\n{link}"
     status: dict[str, str] = {}
     with pg_pool().connection() as conn:
         channels = conn.execute(

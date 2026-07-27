@@ -17,7 +17,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-[#f3f5f7] text-slate-950">
       <header className="border-b border-slate-200 bg-[#081a2c] text-white lg:hidden">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
-          <Link href="/" className="font-semibold tracking-tight">AgentBlackBox</Link>
+          <Link href="/" className="font-semibold tracking-tight">Leaflyst</Link>
           <nav className="flex gap-4 text-xs text-slate-300">
             {nav.slice(1).map(([label, href]) => <Link href={href} key={href}>{label}</Link>)}
           </nav>
@@ -25,9 +25,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
       <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col bg-[#081a2c] px-5 py-7 text-white lg:flex">
         <Link href="/" className="flex items-center gap-3 px-2">
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-cyan-400 font-black text-[#081a2c]">AB</span>
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-cyan-400 font-black text-[#081a2c]">LY</span>
           <span>
-            <span className="block font-semibold tracking-tight">AgentBlackBox</span>
+            <span className="block font-semibold tracking-tight">Leaflyst</span>
             <span className="block text-[11px] uppercase tracking-[0.18em] text-slate-400">Security recorder</span>
           </span>
         </Link>

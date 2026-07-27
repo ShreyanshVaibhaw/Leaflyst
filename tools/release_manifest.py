@@ -7,50 +7,15 @@ import hashlib
 import json
 import subprocess
 import sys
-import urllib.parse
-import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 DEFAULT_IMAGES = {
-    "python": "agentblackbox-python:release-smoke",
-    "web": "agentblackbox-web:release-smoke",
+    "python": "leaflyst-python:release-smoke",
+    "web": "leaflyst-web:release-smoke",
 }
 REVISION_LABEL = "org.opencontainers.image.revision"
-NODE_INVENTORY = r"""
-const fs = require('fs');
-const roots = ['/app/node_modules'];
-const seen = new Set();
-const packages = new Map();
-while (roots.length) {
-  const current = roots.pop();
-  let real;
-  try { real = fs.realpathSync(current); } catch { continue; }
-  if (seen.has(real)) continue;
-  seen.add(real);
-  let entries;
-  try { entries = fs.readdirSync(real, {withFileTypes: true}); } catch { continue; }
-  const manifest = `${real}/package.json`;
-  try {
-    const pkg = JSON.parse(fs.readFileSync(manifest, 'utf8'));
-    if (typeof pkg.name === 'string' && typeof pkg.version === 'string') {
-      packages.set(`${pkg.name}\u0000${pkg.version}`, {name: pkg.name, version: pkg.version});
-    }
-  } catch {}
-  for (const entry of entries) {
-    if (entry.name !== '.bin' && (entry.isDirectory() || entry.isSymbolicLink())) {
-      roots.push(`${real}/${entry.name}`);
-    }
-  }
-}
-process.stdout.write(JSON.stringify([...packages.values()]));
-"""
-PYTHON_INVENTORY = (
-    "import importlib.metadata,json;"
-    "print(json.dumps([{'name':d.metadata['Name'],'version':d.version} "
-    "for d in importlib.metadata.distributions() if d.metadata['Name']]))"
-)
 
 
 def run(*args: str) -> str:
@@ -84,93 +49,13 @@ def inspect_image(image: str) -> dict[str, Any]:
     }
 
 
-def language_packages(kind: str, image: str) -> list[dict[str, str]]:
-    if kind == "python":
-        raw = run("docker", "run", "--rm", "--entrypoint", "python", image, "-c", PYTHON_INVENTORY)
-        ecosystem = "pypi"
-    else:
-        raw = run("docker", "run", "--rm", "--entrypoint", "node", image, "-e", NODE_INVENTORY)
-        ecosystem = "npm"
-    return [
-        {"ecosystem": ecosystem, "name": item["name"], "version": item["version"]}
-        for item in json.loads(raw)
-    ]
-
-
-def os_packages(image: str) -> list[dict[str, str]]:
-    output = run(
-        "docker",
-        "run",
-        "--rm",
-        "--entrypoint",
-        "dpkg-query",
-        image,
-        "-W",
-        "-f=${Package}\\t${Version}\\n",
-    )
-    packages: list[dict[str, str]] = []
-    for line in output.splitlines():
-        name, version = line.split("\t", 1)
-        packages.append({"ecosystem": "deb", "name": name, "version": version})
-    return packages
-
-
-def purl(component: dict[str, str]) -> str:
-    ecosystem = component["ecosystem"]
-    raw_name = component["name"]
-    if ecosystem == "npm" and raw_name.startswith("@") and "/" in raw_name:
-        namespace, package_name = raw_name.split("/", 1)
-        encoded_namespace = urllib.parse.quote(namespace, safe="")
-        encoded_name = urllib.parse.quote(package_name, safe="")
-        name = f"{encoded_namespace}/{encoded_name}"
-    else:
-        if ecosystem == "pypi":
-            raw_name = raw_name.lower().replace("_", "-").replace(".", "-")
-        name = urllib.parse.quote(raw_name, safe="")
-    version = urllib.parse.quote(component["version"], safe="")
-    if ecosystem == "deb":
-        return f"pkg:deb/debian/{name}@{version}"
-    return f"pkg:{ecosystem}/{name}@{version}"
-
-
-def make_sbom(kind: str, image: dict[str, Any], commit: str) -> dict[str, Any]:
-    packages = os_packages(image["tag"]) + language_packages(kind, image["tag"])
-    unique = {(item["ecosystem"], item["name"], item["version"]): item for item in packages}
-    components = []
-    for item in sorted(unique.values(), key=lambda value: tuple(value.values())):
-        ref = purl(item)
-        components.append(
-            {
-                "type": "library",
-                "name": item["name"],
-                "version": item["version"],
-                "purl": ref,
-                "bom-ref": ref,
-                "properties": [{"name": "abx:ecosystem", "value": item["ecosystem"]}],
-            }
-        )
-    serial = uuid.uuid5(uuid.NAMESPACE_URL, f"{image['image_id']}:{commit}")
-    return {
-        "$schema": "https://cyclonedx.org/schema/bom-1.5.schema.json",
-        "bomFormat": "CycloneDX",
-        "specVersion": "1.5",
-        "serialNumber": f"urn:uuid:{serial}",
-        "version": 1,
-        "metadata": {
-            "timestamp": image["created"],
-            "component": {
-                "type": "container",
-                "name": image["tag"],
-                "version": image["image_id"],
-                "bom-ref": image["image_id"],
-                "properties": [
-                    {"name": "abx:git_commit", "value": commit},
-                    {"name": "abx:platform", "value": image["platform"]},
-                ],
-            },
-        },
-        "components": components,
-    }
+def generate_sbom(syft: str, image: str, path: Path) -> None:
+    run(syft, image, "-o", f"cyclonedx-json={path}")
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if document.get("bomFormat") != "CycloneDX":
+        raise RuntimeError(f"Syft did not produce a CycloneDX SBOM for {image}")
+    if not document.get("components"):
+        raise RuntimeError(f"Syft produced an empty SBOM for {image}")
 
 
 def sha256(path: Path) -> str:
@@ -181,7 +66,7 @@ def write_json(path: Path, value: object) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def generate(output: Path, images: dict[str, str], require_clean: bool) -> Path:
+def generate(output: Path, images: dict[str, str], require_clean: bool, syft: str = "syft") -> Path:
     commit = git_commit()
     dirty = git_is_dirty()
     if require_clean and dirty:
@@ -197,7 +82,7 @@ def generate(output: Path, images: dict[str, str], require_clean: bool) -> Path:
             )
             raise RuntimeError(message)
         sbom_path = output / f"{kind}.cdx.json"
-        write_json(sbom_path, make_sbom(kind, image, commit))
+        generate_sbom(syft, image["tag"], sbom_path)
         records[kind] = {**image, "sbom": sbom_path.name, "sbom_sha256": sha256(sbom_path)}
     manifest = {
         "schema_version": 1,
@@ -231,6 +116,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output", type=Path, default=Path("release-artifacts"))
     parser.add_argument("--python-image", default=DEFAULT_IMAGES["python"])
     parser.add_argument("--web-image", default=DEFAULT_IMAGES["web"])
+    parser.add_argument("--syft", default="syft", help="path to the Syft executable")
     parser.add_argument("--require-clean", action="store_true")
     parser.add_argument("--verify", type=Path)
     return parser.parse_args()
@@ -247,6 +133,7 @@ def main() -> int:
                 args.output,
                 {"python": args.python_image, "web": args.web_image},
                 args.require_clean,
+                args.syft,
             )
             print(f"OK: wrote release provenance to {path}")
     except (OSError, KeyError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:

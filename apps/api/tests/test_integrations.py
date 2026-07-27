@@ -32,7 +32,7 @@ def test_setup_validates_persists_and_queues(monkeypatch, tenant: tuple[str, str
         settings,
         github_app_id="123",
         github_private_key="private-key",
-        github_app_slug="agentblackbox-test",
+        github_app_slug="leaflyst-test",
         web_url="http://dashboard.test",
     )
     monkeypatch.setattr(integrations, "settings", configured)
@@ -87,3 +87,66 @@ def test_setup_rejects_non_organization(monkeypatch, tenant: tuple[str, str]) ->
         params={"installation_id": "789", "state": integrations.make_state(tenant_id)},
     )
     assert response.status_code == 400
+
+
+def test_gcp_connect_stores_only_project_metadata_and_queues(
+    monkeypatch, tenant: tuple[str, str]
+) -> None:
+    tenant_id, _token = tenant
+    scanner_principal = "serviceAccount:scanner@host-project.iam.gserviceaccount.com"
+    monkeypatch.setattr(
+        integrations,
+        "settings",
+        replace(settings, gcp_scanner_principal=scanner_principal),
+    )
+    queued: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        integrations,
+        "enqueue_gcp_scan",
+        lambda tid, project: queued.append((tid, project)) or "2-0",
+    )
+    response = client.post(
+        "/v1/integrations/gcp/connect",
+        params={"tenant_id": tenant_id},
+        headers={"X-ABX-Admin-Key": settings.admin_key},
+        json={"project_id": "pocketos-prod"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"project_id": "pocketos-prod", "queued": True}
+    assert queued == [(tenant_id, "pocketos-prod")]
+    with psycopg.connect(settings.pg_dsn) as conn:
+        row = conn.execute(
+            "SELECT external_id, account_login, metadata FROM integration_connections "
+            "WHERE tenant_id=%s AND provider='gcp'",
+            (tenant_id,),
+        ).fetchone()
+    assert row is not None
+    assert row[0:2] == ("pocketos-prod", "pocketos-prod")
+    assert row[2]["scanner_principal"] == scanner_principal
+    assert "private" not in str(row).lower()
+
+
+def test_gcp_connect_requires_configuration_and_valid_project(
+    monkeypatch, tenant: tuple[str, str]
+) -> None:
+    tenant_id, _token = tenant
+    monkeypatch.setattr(
+        integrations,
+        "settings",
+        replace(settings, gcp_scanner_principal=""),
+    )
+    headers = {"X-ABX-Admin-Key": settings.admin_key}
+    unavailable = client.post(
+        "/v1/integrations/gcp/connect",
+        params={"tenant_id": tenant_id},
+        headers=headers,
+        json={"project_id": "pocketos-prod"},
+    )
+    invalid = client.post(
+        "/v1/integrations/gcp/connect",
+        params={"tenant_id": tenant_id},
+        headers=headers,
+        json={"project_id": "../../secrets"},
+    )
+    assert unavailable.status_code == 503
+    assert invalid.status_code == 422

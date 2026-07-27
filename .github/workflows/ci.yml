@@ -48,10 +48,14 @@ jobs:
           cache: pnpm
           cache-dependency-path: apps/web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - name: Production dependency audit
+        run: pnpm audit --prod --audit-level high
       - name: Lint
         run: pnpm exec eslint .
       - name: Typecheck
         run: pnpm exec tsc --noEmit
+      - name: Tests
+        run: pnpm test
       - name: Build
         run: pnpm exec next build
 
@@ -62,14 +66,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: Build Python release image
-        run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/python.Dockerfile -t agentblackbox-python:release-smoke .
+        run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/python.Dockerfile -t leaflyst-python:release-smoke .
       - name: Build web release image
-        run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/web.Dockerfile -t agentblackbox-web:release-smoke .
+        run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/web.Dockerfile -t leaflyst-web:release-smoke .
       - name: Smoke release images
         run: python demo/container_smoke.py --skip-build
+      - name: Install Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@v0
+        with:
+          syft-version: v1.45.1
       - name: Generate and verify release provenance
         run: |
-          python tools/release_manifest.py --output release-artifacts --require-clean
+          python tools/release_manifest.py --output release-artifacts --require-clean --syft "${{ steps.syft.outputs.cmd }}"
           python tools/release_manifest.py --verify release-artifacts/release-manifest.json
       - name: Retain release manifest and SBOMs
         uses: actions/upload-artifact@v4
@@ -78,12 +87,16 @@ jobs:
           path: release-artifacts
           if-no-files-found: error
       - name: Start release topology
+        env:
+          ABX_DEMO_ENABLED: "true"
         run: |
-          docker tag agentblackbox-python:release-smoke agentblackbox-python:local
-          docker tag agentblackbox-web:release-smoke agentblackbox-web:local
+          docker tag leaflyst-python:release-smoke leaflyst-python:local
+          docker tag leaflyst-web:release-smoke leaflyst-web:local
           docker compose --env-file infra/release.env.example -f infra/compose.release.yml up -d --no-build --wait
           curl --fail http://127.0.0.1:18000/readyz
           curl --fail http://127.0.0.1:13000/security
+      - name: Public browser journeys
+        run: docker compose --env-file infra/release.env.example -f infra/compose.release.yml exec -T -e E2E_BASE_URL=http://127.0.0.1:3000 web sh -lc 'cd /app/.next && node --input-type=module' < apps/web/e2e/public-smoke.mjs
       - name: Backup and restore integrity drill
         run: python demo/recovery_drill.py --skip-build
       - name: Release topology logs

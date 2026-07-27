@@ -1,9 +1,9 @@
 "use server";
 
+import { createHash, randomBytes } from "node:crypto";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { adminApiPost, apiPost } from "@/lib/api";
-import { currentUserId } from "@/lib/auth";
-import { setTenantId } from "@/lib/tenant";
+import { adminApiPost } from "@/lib/api";
 
 type DemoResult = {
   tenant_id: string;
@@ -12,28 +12,36 @@ type DemoResult = {
   finding_id: string;
   scanner_warning: string;
   destructive_attempt: string;
+  share_path: string;
+  expires_at: string;
 };
 
-export async function runPocketOSDemo() {
-  const result = await apiPost<DemoResult>("/v1/demo/run", {});
-  const userId = await currentUserId();
-  if (!userId) throw new Error("Sign in before running the demo");
-  await setTenantId(result.tenant_id, userId);
-  const params = new URLSearchParams({
-    session: result.session_id,
-    credential: result.credential_id,
-    finding: result.finding_id,
-  });
-  redirect(`/demo?${params.toString()}`);
+const visitorCookie = "abx_demo_visitor";
+
+async function visitorReference(): Promise<string> {
+  const store = await cookies();
+  let visitor = store.get(visitorCookie)?.value;
+  if (!visitor || !/^[A-Za-z0-9_-]{43}$/.test(visitor)) {
+    visitor = randomBytes(32).toString("base64url");
+    store.set(visitorCookie, visitor, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/demo",
+      maxAge: 60 * 60 * 24,
+    });
+  }
+  return createHash("sha256").update(visitor).digest("hex");
 }
 
-export async function restoreWorkspace() {
-  const userId = await currentUserId();
-  if (!userId) throw new Error("Sign in before restoring the workspace");
-  const result = await adminApiPost<{ tenant_id: string }>("/v1/onboarding/bootstrap", {
-    user_ref: userId,
-    tenant_name: "Workspace",
-  });
-  await setTenantId(result.tenant_id, userId);
-  redirect("/");
+export async function runPocketOSDemo() {
+  let result: DemoResult;
+  try {
+    result = await adminApiPost<DemoResult>("/v1/demo/public/run", {
+      visitor_ref: await visitorReference(),
+    });
+  } catch {
+    redirect("/demo?error=unavailable");
+  }
+  redirect(`/demo?share=${encodeURIComponent(result.share_path)}`);
 }

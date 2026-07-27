@@ -7,7 +7,14 @@ import {
   productionAuthRequired,
 } from "@/lib/auth";
 
-const isPublicRoute = createRouteMatcher(["/", "/security", "/sign-in(.*)", "/sign-up(.*)"]);
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/demo",
+  "/security",
+  "/share/(.*)",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+]);
 
 export default clerkEnabled
   ? clerkMiddleware(async (auth, req) => {

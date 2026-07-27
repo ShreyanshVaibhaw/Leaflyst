@@ -1,4 +1,4 @@
-name: agentblackbox-dev
+name: leaflyst-dev
 
 services:
   postgres:

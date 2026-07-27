@@ -1,7 +1,7 @@
 [project]
 name = "abx-sdk"
 version = "0.1.0"
-description = "AgentBlackBox Python SDK: LangGraph instrumentor emitting OTel GenAI spans"
+description = "Leaflyst Python SDK: LangGraph instrumentor emitting OTel GenAI spans"
 requires-python = ">=3.12"
 dependencies = [
     "abx-schemas",

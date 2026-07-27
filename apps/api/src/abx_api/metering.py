@@ -44,14 +44,3 @@ def decide_capture(
         over_limit_payloads=over_limit_payloads,
         limit_state="degraded" if over_limit_payloads else "within_limit",
     )
-
-
-def usage_state(events: int, daily_event_limit: int | None) -> LimitState:
-    """Describe a previously committed daily count."""
-    if events < 0:
-        raise ValueError("usage count cannot be negative")
-    if daily_event_limit is None:
-        return "unlimited"
-    if daily_event_limit < 1:
-        raise ValueError("daily event limit must be positive")
-    return "degraded" if events > daily_event_limit else "within_limit"

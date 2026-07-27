@@ -79,6 +79,96 @@ def compute_github_findings(conn: psycopg.Connection, tenant_id: str) -> list[Fi
     return findings
 
 
+def compute_gcp_findings(conn: psycopg.Connection, tenant_id: str) -> list[Finding]:
+    findings: list[Finding] = []
+    credentials = conn.execute(
+        "SELECT c.id, c.fingerprint, c.created_at_provider, p.external_id, p.id "
+        "FROM credentials c JOIN principals p ON c.owner_principal = p.id "
+        "WHERE c.tenant_id = %s AND c.provider = 'gcp'",
+        (tenant_id,),
+    ).fetchall()
+    now = _now()
+    for credential_id, fingerprint, created, owner, principal_id in credentials:
+        reach = _blast_radius(conn, str(principal_id))
+        findings.extend(
+            _gcp_rules(
+                str(credential_id),
+                str(fingerprint),
+                created,
+                str(owner),
+                reach,
+                now,
+            )
+        )
+    return findings
+
+
+def _gcp_rules(
+    credential_id: str,
+    fingerprint: str,
+    created: datetime | None,
+    owner: str,
+    reach: dict[str, Any],
+    now: datetime,
+) -> list[Finding]:
+    out: list[Finding] = []
+    has_admin = "admin" in reach["access_levels"]
+    has_write = "write" in reach["access_levels"]
+    if has_admin or has_write:
+        out.append(
+            Finding(
+                "over_privileged",
+                f"gcp:overpriv:{fingerprint}",
+                "critical" if has_admin else "high",
+                credential_id,
+                {
+                    "fingerprint": fingerprint,
+                    "owner": owner,
+                    "scopes": reach["scopes"][:20],
+                    "reachable_resources": reach["resources"][:20],
+                    "reach_count": reach["count"],
+                    "last_used_available": False,
+                },
+                "Replace this user-managed key where possible and reduce the service "
+                "account to read-only or the minimum roles it needs.",
+            )
+        )
+    if created is not None and (now - created).days > STALE_ROTATION_DAYS:
+        out.append(
+            Finding(
+                "stale_authorization",
+                f"gcp:stale:{fingerprint}",
+                "medium",
+                credential_id,
+                {
+                    "fingerprint": fingerprint,
+                    "owner": owner,
+                    "age_days": (now - created).days,
+                    "last_used_available": False,
+                },
+                f"Rotate or remove this service-account key; it is over "
+                f"{STALE_ROTATION_DAYS} days old.",
+            )
+        )
+    out.append(
+        Finding(
+            "blast_radius",
+            f"gcp:blast:{fingerprint}",
+            "info",
+            credential_id,
+            {
+                "fingerprint": fingerprint,
+                "owner": owner,
+                "reach_count": reach["count"],
+                "resources": reach["resources"][:50],
+                "last_used_available": False,
+            },
+            "Review what this service-account key can reach if compromised.",
+        )
+    )
+    return out
+
+
 def _github_rules(
     cred_id: str,
     fingerprint: str,

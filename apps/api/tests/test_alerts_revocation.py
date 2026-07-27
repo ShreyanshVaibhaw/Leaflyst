@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import psycopg
+import pytest
 from abx_api import alerts as alert_api
 from abx_api import revocation
 from abx_api.alert_worker import process_job
@@ -313,3 +314,118 @@ def test_github_revoker_uses_only_documented_write_endpoints(monkeypatch: Any) -
         ("DELETE", "https://api.github.com/repos/acme/repo/keys/7"),
     ]
     assert json.loads(requests[0].data) == {"action": "revoke"}
+
+
+def test_gcp_keys_are_guided_only_even_when_other_write_credentials_exist(
+    tenant: tuple[str, str], monkeypatch: Any
+) -> None:
+    tenant_id, _token = tenant
+    owner = "svc-agent@pocketos-prod.iam.gserviceaccount.com"
+    fingerprint = "gcpkey:key-123"
+    with psycopg.connect(settings.pg_dsn) as conn:
+        principal_id = conn.execute(
+            "INSERT INTO principals (tenant_id, provider, kind, external_id) "
+            "VALUES (%s, 'gcp', 'service_account', %s) RETURNING id",
+            (tenant_id, owner),
+        ).fetchone()[0]
+        credential_id = str(
+            conn.execute(
+                "INSERT INTO credentials "
+                "(tenant_id, provider, kind, fingerprint, owner_principal) "
+                "VALUES (%s, 'gcp', 'service_account_key', %s, %s) RETURNING id",
+                (tenant_id, fingerprint, principal_id),
+            ).fetchone()[0]
+        )
+        conn.execute(
+            "INSERT INTO integration_connections "
+            "(tenant_id, provider, external_id, account_login) "
+            "VALUES (%s, 'gcp', 'pocketos-prod', 'pocketos-prod')",
+            (tenant_id,),
+        )
+    monkeypatch.setattr(
+        revocation,
+        "settings",
+        replace(settings, github_revoke_token="unrelated-write-token"),
+    )
+    preview = client.get(
+        f"/v1/revocation/{credential_id}/impact",
+        params={"tenant_id": tenant_id},
+        headers=ADMIN,
+    )
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["one_click"] is False
+    assert body["write_credential_configured"] is False
+    assert body["next_action"] == "deactivate"
+    assert body["guided_commands"] == [
+        "gcloud iam service-accounts keys disable key-123 "
+        f"--iam-account={owner} --project=pocketos-prod",
+        "gcloud iam service-accounts keys delete key-123 "
+        f"--iam-account={owner} --project=pocketos-prod",
+    ]
+    attempt = client.post(
+        f"/v1/revocation/{credential_id}",
+        params={"tenant_id": tenant_id},
+        headers=ADMIN,
+        json={"confirmation": fingerprint, "action": "deactivate"},
+    )
+    assert attempt.status_code == 409
+    with pytest.raises(ValueError, match="not supported"):
+        revocation.adapter_for("gcp")
+
+
+def test_revocation_adapters_and_confirmation_guards(
+    tenant: tuple[str, str], monkeypatch: Any,
+) -> None:
+    tenant_id, _token = tenant
+    credential_id, fingerprint = _seed_credential(tenant_id)
+    monkeypatch.setattr(
+        revocation,
+        "settings",
+        replace(
+            settings,
+            aws_revoke_access_key_id="write-only-id",
+            aws_revoke_secret_access_key="write-only-secret",
+        ),
+    )
+
+    wrong_confirmation = client.post(
+        f"/v1/revocation/{credential_id}",
+        params={"tenant_id": tenant_id},
+        headers=ADMIN,
+        json={"confirmation": "wrong", "action": "deactivate"},
+    )
+    assert wrong_confirmation.status_code == 422
+    wrong_action = client.post(
+        f"/v1/revocation/{credential_id}",
+        params={"tenant_id": tenant_id},
+        headers=ADMIN,
+        json={"confirmation": fingerprint, "action": "delete"},
+    )
+    assert wrong_action.status_code == 409
+
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    class FakeIam:
+        def update_access_key(self, **kwargs: str) -> None:
+            calls.append(("deactivate", kwargs))
+
+        def delete_access_key(self, **kwargs: str) -> None:
+            calls.append(("delete", kwargs))
+
+    monkeypatch.setattr(revocation.boto3, "client", lambda *_args, **_kwargs: FakeIam())
+    adapter = revocation.AwsRevokeAdapter()
+    credential = {"owner": "staging-bot", "fingerprint": fingerprint}
+    adapter.execute("deactivate", credential)
+    adapter.execute("delete", credential)
+    with pytest.raises(ValueError, match="unsupported AWS"):
+        adapter.execute("revoke", credential)
+    assert [action for action, _arguments in calls] == ["deactivate", "delete"]
+    assert isinstance(revocation.adapter_for("aws"), revocation.AwsRevokeAdapter)
+    assert isinstance(revocation.adapter_for("github"), revocation.GitHubRevokeAdapter)
+
+    github = revocation.GitHubRevokeAdapter()
+    with pytest.raises(ValueError, match="revoke only"):
+        github.execute("delete", {"fingerprint": "pat:42"})
+    with pytest.raises(ValueError, match="unsupported GitHub"):
+        github.execute("revoke", {"fingerprint": "unknown"})

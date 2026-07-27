@@ -14,19 +14,40 @@ from abx_scanner.gh_auth import installation_details, now_epoch
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from abx_api.auth import require_admin
-from abx_api.scan_queue import enqueue_github_scan
+from abx_api.scan_queue import enqueue_gcp_scan, enqueue_github_scan
 from abx_api.settings import settings
 from abx_api.store import pg_pool
 
 router = APIRouter(prefix="/v1/integrations")
 
+GCP_REQUIRED_ROLES = (
+    "roles/iam.serviceAccountViewer",
+    "roles/cloudasset.viewer",
+    "roles/serviceusage.serviceUsageConsumer",
+)
+
 
 class GitHubInstallLink(BaseModel):
     configured: bool
     install_url: str | None
+
+
+class GcpConnectInfo(BaseModel):
+    configured: bool
+    scanner_principal: str | None
+    required_roles: list[str]
+
+
+class GcpConnectRequest(BaseModel):
+    project_id: str = Field(pattern=r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")
+
+
+class GcpConnectResult(BaseModel):
+    project_id: str
+    queued: bool
 
 
 def _b64(data: bytes) -> str:
@@ -82,6 +103,56 @@ def github_install_url(tenant_id: str) -> GitHubInstallLink:
             f"https://github.com/apps/{settings.github_app_slug}/installations/new?{query}"
         ),
     )
+
+
+@router.get(
+    "/gcp/connect-info",
+    response_model=GcpConnectInfo,
+    dependencies=[Depends(require_admin)],
+)
+def gcp_connect_info(tenant_id: str) -> GcpConnectInfo:
+    del tenant_id
+    principal = settings.gcp_scanner_principal or None
+    return GcpConnectInfo(
+        configured=principal is not None,
+        scanner_principal=principal,
+        required_roles=list(GCP_REQUIRED_ROLES),
+    )
+
+
+@router.post(
+    "/gcp/connect",
+    response_model=GcpConnectResult,
+    dependencies=[Depends(require_admin)],
+)
+def gcp_connect(tenant_id: str, request: GcpConnectRequest) -> GcpConnectResult:
+    if not settings.gcp_scanner_principal:
+        raise HTTPException(
+            status_code=503,
+            detail="Google Cloud scanner principal is not configured",
+        )
+    with pg_pool().connection() as conn:
+        conn.execute(
+            "INSERT INTO integration_connections "
+            "(tenant_id, provider, external_id, account_login, status, metadata) "
+            "VALUES (%s, 'gcp', %s, %s, 'connected', %s) "
+            "ON CONFLICT (tenant_id, provider, external_id) DO UPDATE SET "
+            "account_login = EXCLUDED.account_login, status = 'connected', "
+            "metadata = EXCLUDED.metadata, updated_at = now()",
+            (
+                tenant_id,
+                request.project_id,
+                request.project_id,
+                Jsonb(
+                    {
+                        "scanner_principal": settings.gcp_scanner_principal,
+                        "required_roles": list(GCP_REQUIRED_ROLES),
+                    }
+                ),
+            ),
+        )
+    enqueue_gcp_scan(tenant_id, request.project_id)
+    return GcpConnectResult(project_id=request.project_id, queued=True)
 
 
 @router.get("/github/setup", include_in_schema=False)

@@ -24,6 +24,7 @@ COPY infra/migrate.py infra/migrate.py
 COPY infra/postgres infra/postgres
 
 RUN uv sync --frozen --no-dev --package abx-api \
+    && rm /bin/uv /bin/uvx \
     && groupadd --gid 10001 abx \
     && useradd --uid 10001 --gid abx --no-create-home --shell /usr/sbin/nologin abx
 

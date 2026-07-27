@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import psycopg
 from abx_api.main import app
-from conftest import requires_stack
+from abx_api.settings import settings
+from conftest import _delete_tenant_data, requires_stack
 from fastapi.testclient import TestClient
 
 
@@ -44,3 +46,85 @@ def test_pocketos_demo_runs_unattended_and_is_sandboxed(tenant, monkeypatch) -> 
     )
     assert impact.status_code == 200, impact.text
     assert impact.json()["guided_commands"]
+
+
+@requires_stack
+def test_public_demo_is_per_visitor_rate_limited_and_read_only(monkeypatch) -> None:
+    visitor_a = "a" * 64
+    visitor_b = "b" * 64
+    monkeypatch.setattr(
+        "abx_api.demo.settings",
+        SimpleNamespace(
+            demo_enabled=True,
+            public_demo_max_runs_per_hour=2,
+            public_demo_ttl_hours=1,
+        ),
+    )
+    client = TestClient(app)
+    tenant_ids: set[str] = set()
+    try:
+        first = client.post(
+            "/v1/demo/public/run",
+            json={"visitor_ref": visitor_a},
+            headers={"X-ABX-Admin-Key": "dev-admin-key"},
+        )
+        assert first.status_code == 200, first.text
+        first_result = first.json()
+        tenant_ids.add(first_result["tenant_id"])
+        assert first_result["sandboxed"] is True
+        assert first_result["share_path"].startswith("/share/abx_share_")
+
+        replay_path = first_result["share_path"].replace("/share/", "/v1/replay/shared/")
+        replay = client.get(replay_path)
+        assert replay.status_code == 200, replay.text
+        assert replay.json()["read_only"] is True
+
+        second = client.post(
+            "/v1/demo/public/run",
+            json={"visitor_ref": visitor_a},
+            headers={"X-ABX-Admin-Key": "dev-admin-key"},
+        )
+        assert second.status_code == 200, second.text
+        assert second.json()["tenant_id"] == first_result["tenant_id"]
+
+        limited = client.post(
+            "/v1/demo/public/run",
+            json={"visitor_ref": visitor_a},
+            headers={"X-ABX-Admin-Key": "dev-admin-key"},
+        )
+        assert limited.status_code == 429
+
+        isolated = client.post(
+            "/v1/demo/public/run",
+            json={"visitor_ref": visitor_b},
+            headers={"X-ABX-Admin-Key": "dev-admin-key"},
+        )
+        assert isolated.status_code == 200, isolated.text
+        tenant_ids.add(isolated.json()["tenant_id"])
+        assert isolated.json()["tenant_id"] != first_result["tenant_id"]
+
+        invalid = client.post(
+            "/v1/demo/public/run",
+            json={"visitor_ref": "not-a-hash"},
+            headers={"X-ABX-Admin-Key": "dev-admin-key"},
+        )
+        assert invalid.status_code == 422
+
+        tenant_a, tenant_b = tenant_ids
+        with psycopg.connect(settings.pg_dsn) as conn:
+            members = conn.execute(
+                "SELECT count(*) FROM tenant_members WHERE tenant_id IN (%s,%s)",
+                (tenant_a, tenant_b),
+            ).fetchone()
+        assert members is not None and members[0] == 0
+    finally:
+        with psycopg.connect(settings.pg_dsn) as conn:
+            rows = conn.execute(
+                "DELETE FROM public_demo_tenants WHERE visitor_ref IN (%s,%s) "
+                "RETURNING demo_tenant_id",
+                (visitor_a, visitor_b),
+            ).fetchall()
+            for row in rows:
+                _delete_tenant_data(conn, str(row[0]))
+                conn.execute("DELETE FROM tenants WHERE id=%s", (row[0],))
+            conn.commit()

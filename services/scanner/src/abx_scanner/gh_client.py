@@ -68,7 +68,7 @@ class GitHubClient:
                 "Authorization": f"Bearer {self.token}",
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": API_VERSION,
-                "User-Agent": "agentblackbox-scanner",
+                "User-Agent": "leaflyst-scanner",
             },
         )
         self.counter.increment()

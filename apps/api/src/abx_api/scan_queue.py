@@ -33,3 +33,15 @@ def enqueue_github_scan(tenant_id: str, installation_id: str, org: str) -> str:
         },
     )
     return str(job_id)
+
+
+def enqueue_gcp_scan(tenant_id: str, project_id: str) -> str:
+    job_id = redis_client().xadd(
+        SCAN_STREAM,
+        {
+            "provider": "gcp",
+            "tenant_id": tenant_id,
+            "project_id": project_id,
+        },
+    )
+    return str(job_id)

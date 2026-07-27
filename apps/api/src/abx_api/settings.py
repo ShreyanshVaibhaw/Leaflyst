@@ -86,7 +86,7 @@ class Settings:
     )
     resend_api_key: str = field(default_factory=lambda: _env("ABX_RESEND_API_KEY", ""))
     alert_email_from: str = field(
-        default_factory=lambda: _env("ABX_ALERT_EMAIL_FROM", "AgentBlackBox <alerts@example.com>")
+        default_factory=lambda: _env("ABX_ALERT_EMAIL_FROM", "Leaflyst <alerts@example.com>")
     )
     aws_revoke_access_key_id: str = field(
         default_factory=lambda: _env("ABX_AWS_REVOKE_ACCESS_KEY_ID", "")
@@ -100,8 +100,17 @@ class Settings:
     github_revoke_token: str = field(
         default_factory=lambda: _env("ABX_GITHUB_REVOKE_TOKEN", "")
     )
+    gcp_scanner_principal: str = field(
+        default_factory=lambda: _env("ABX_GCP_SCANNER_PRINCIPAL", "")
+    )
     demo_enabled: bool = field(
         default_factory=lambda: _env("ABX_DEMO_ENABLED", "false").lower() == "true"
+    )
+    public_demo_max_runs_per_hour: int = field(
+        default_factory=lambda: int(_env("ABX_PUBLIC_DEMO_MAX_RUNS_PER_HOUR", "5"))
+    )
+    public_demo_ttl_hours: int = field(
+        default_factory=lambda: int(_env("ABX_PUBLIC_DEMO_TTL_HOURS", "24"))
     )
 
 
@@ -126,4 +135,8 @@ def production_config_errors(value: Settings) -> list[str]:
         errors.append("ABX_S3_SERVER_SIDE_ENCRYPTION must be configured")
     if value.anchor_retention_days < 1:
         errors.append("ABX_ANCHOR_RETENTION_DAYS must be at least 1")
+    if value.demo_enabled and value.public_demo_max_runs_per_hour < 1:
+        errors.append("ABX_PUBLIC_DEMO_MAX_RUNS_PER_HOUR must be at least 1")
+    if value.demo_enabled and not 1 <= value.public_demo_ttl_hours <= 24 * 30:
+        errors.append("ABX_PUBLIC_DEMO_TTL_HOURS must be between 1 and 720")
     return errors

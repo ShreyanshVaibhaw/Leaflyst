@@ -63,3 +63,18 @@ def test_worker_treats_idle_timeout_as_empty_poll() -> None:
         worker.redis.TimeoutError("idle")
     )
     assert worker.run_worker(client, once=True) == 0
+
+
+def test_worker_resolves_gcp_credentials_only_inside_worker(monkeypatch) -> None:
+    fake_client = object()
+    seen: list[tuple[str, str, object]] = []
+    monkeypatch.setattr(worker, "GcpClient", lambda: fake_client)
+    monkeypatch.setattr(
+        worker,
+        "run_gcp_scan",
+        lambda tenant, project, client: seen.append((tenant, project, client)),
+    )
+    job = {"provider": "gcp", "tenant_id": "tenant", "project_id": "pocketos-prod"}
+    worker.process_job(job)
+    assert seen == [("tenant", "pocketos-prod", fake_client)]
+    assert set(job) == {"provider", "tenant_id", "project_id"}

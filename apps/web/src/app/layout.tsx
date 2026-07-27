@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AgentBlackBox",
+  title: "Leaflyst",
   description: "The flight recorder for AI agents",
 };
 

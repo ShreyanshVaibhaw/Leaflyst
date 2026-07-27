@@ -230,7 +230,7 @@ def main() -> int:
         report_ok = (
             report["session"]["session_id"] == session_id
             and report["verification"]["valid"]
-            and report["markdown"].startswith("# AgentBlackBox Incident Report")
+            and report["markdown"].startswith("# Leaflyst Incident Report")
             and report["anchor_status"] == "matched"
         )
         if not report_ok:

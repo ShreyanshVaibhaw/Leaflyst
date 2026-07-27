@@ -1,5 +1,5 @@
-"""Public AgentBlackBox SDK import surface."""
+"""Public Leaflyst SDK import surface."""
 
-from abx_sdk import AgentBlackBoxCallbackHandler, instrument
+from abx_sdk import LeaflystCallbackHandler, instrument
 
-__all__ = ["AgentBlackBoxCallbackHandler", "instrument"]
+__all__ = ["LeaflystCallbackHandler", "instrument"]

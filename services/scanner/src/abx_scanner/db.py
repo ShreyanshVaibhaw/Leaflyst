@@ -15,7 +15,7 @@ DSN = os.environ.get("ABX_PG_DSN", "postgresql://abx:abx_dev_password@localhost:
 
 def connect_raw() -> psycopg.Connection:
     """Open a bare connection; caller is responsible for closing it."""
-    return psycopg.connect(DSN)
+    return psycopg.connect(DSN, connect_timeout=2)
 
 
 @contextmanager

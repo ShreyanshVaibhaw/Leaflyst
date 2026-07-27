@@ -10,8 +10,8 @@ import urllib.request
 import uuid
 from collections.abc import Sequence
 
-PYTHON_IMAGE = "agentblackbox-python:release-smoke"
-WEB_IMAGE = "agentblackbox-web:release-smoke"
+PYTHON_IMAGE = "leaflyst-python:release-smoke"
+WEB_IMAGE = "leaflyst-web:release-smoke"
 
 
 def run(command: Sequence[str], *, capture: bool = False) -> str:

@@ -1,8 +1,8 @@
 # Self-serve onboarding
 
 1. Sign in and open `/onboarding`.
-2. Create a workspace. Copy the recording and local-scanner tokens immediately; AgentBlackBox stores only their SHA-256 hashes and cannot display them again. The tokens have separate write-only scopes.
-3. Open **Integrations** and either connect AWS/GitHub or run the AWS scanner locally.
+2. Create a workspace. Copy the recording and local-scanner tokens immediately; Leaflyst stores only their SHA-256 hashes and cannot display them again. The tokens have separate write-only scopes.
+3. Open **Integrations** and connect AWS, GitHub, or Google Cloud, or run the AWS scanner locally.
 4. Install the MCP tap or Python SDK with the write-only token.
 5. Run an agent session, then review **Agents**, **Alerts**, replay, blast radius, and the incident report.
 

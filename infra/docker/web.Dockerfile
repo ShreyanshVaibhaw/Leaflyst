@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.58.0-noble@sha256:35c7d48b4ccaf3aca5018f5f1bf7f50c7da7d61d176c530741f4f2e9ca336c34 AS build
+FROM mcr.microsoft.com/playwright:v1.60.0-noble@sha256:9bd26ad900bb5e0f4dee75839e957a89ae89c2b7ab1e76050e559790e946b948 AS build
 
 USER root
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
@@ -9,7 +9,7 @@ COPY apps/web ./
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN ABX_TENANT_COOKIE_SECRET=build-time-placeholder-not-a-runtime-secret pnpm build
 
-FROM mcr.microsoft.com/playwright:v1.58.0-noble@sha256:35c7d48b4ccaf3aca5018f5f1bf7f50c7da7d61d176c530741f4f2e9ca336c34
+FROM mcr.microsoft.com/playwright:v1.60.0-noble@sha256:9bd26ad900bb5e0f4dee75839e957a89ae89c2b7ab1e76050e559790e946b948
 
 ARG GIT_COMMIT=unknown
 LABEL org.opencontainers.image.source="https://github.com/ShreyanshVaibhaw/Leaflyst" \
@@ -20,10 +20,13 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx \
+    /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /app
 COPY --from=build --chown=pwuser:pwuser /app/.next/standalone ./
 COPY --from=build --chown=pwuser:pwuser /app/.next/static ./.next/static
 COPY --from=build --chown=pwuser:pwuser /app/public ./public
+RUN ln -s .pnpm/node_modules/playwright-core node_modules/playwright-core
 
 USER pwuser
 EXPOSE 3000

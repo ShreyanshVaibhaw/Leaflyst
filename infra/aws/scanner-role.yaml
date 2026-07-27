@@ -1,17 +1,17 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
-  AgentBlackBox read-only credential scanner role. Grants the scanner
+  Leaflyst read-only credential scanner role. Grants the scanner
   cross-account READ access only (SecurityAudit + ViewOnlyAccess). Revocation
   uses a separate role you create explicitly; this one can never write.
 
 Parameters:
   ScannerAccountId:
     Type: String
-    Description: The AgentBlackBox AWS account allowed to assume this role.
+    Description: The Leaflyst AWS account allowed to assume this role.
   ExternalId:
     Type: String
     Description: >-
-      Per-tenant unguessable id shown in your AgentBlackBox connect screen.
+      Per-tenant unguessable id shown in your Leaflyst connect screen.
       Prevents the confused-deputy problem; the scanner must present it to
       assume this role.
     NoEcho: true
@@ -20,7 +20,7 @@ Resources:
   ScannerReadOnlyRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: AgentBlackBoxScannerReadOnly
+      RoleName: LeaflystScannerReadOnly
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -38,5 +38,5 @@ Resources:
 
 Outputs:
   RoleArn:
-    Description: Paste this ARN into the AgentBlackBox connect screen.
+    Description: Paste this ARN into the Leaflyst connect screen.
     Value: !GetAtt ScannerReadOnlyRole.Arn

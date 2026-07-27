@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify an AgentBlackBox evidence bundle using only the Python standard library."""
+"""Verify an Leaflyst evidence bundle using only the Python standard library."""
 
 from __future__ import annotations
 

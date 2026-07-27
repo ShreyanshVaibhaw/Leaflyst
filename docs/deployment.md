@@ -9,7 +9,7 @@ Copy `infra/release.env.example` outside the repository, replace every
 placeholder with independently generated values, and start the stack:
 
 ```text
-docker compose --env-file /secure/path/agentblackbox.env -f infra/compose.release.yml up -d --build
+docker compose --env-file /secure/path/leaflyst.env -f infra/compose.release.yml up -d --build
 curl http://localhost:18000/readyz
 curl http://localhost:13000/security
 ```
@@ -30,14 +30,46 @@ between environments; only the Clerk secret must remain in the secret manager.
 Run singleton maintenance jobs from an external scheduler:
 
 ```text
-docker compose --env-file /secure/path/agentblackbox.env -f infra/compose.release.yml --profile maintenance run --rm anchor
-docker compose --env-file /secure/path/agentblackbox.env -f infra/compose.release.yml --profile maintenance run --rm retention
+docker compose --env-file /secure/path/leaflyst.env -f infra/compose.release.yml --profile maintenance run --rm anchor
+docker compose --env-file /secure/path/leaflyst.env -f infra/compose.release.yml --profile maintenance run --rm retention
 ```
 
 The ClickHouse application password is injected at runtime through
 `users.d/abx_app.xml`. Its grants remain limited to `SELECT` and `INSERT`; it
 cannot mutate or alter stored events. Rotate deployment credentials in the
 secret manager, never in source-controlled environment files or image layers.
+
+## Public demo sandbox
+
+The fake PocketOS reenactment is disabled by default. Set `ABX_DEMO_ENABLED=true`
+only when `/demo` is intentionally exposed through the web ingress. Each browser
+receives an opaque cookie whose SHA-256 reference maps to a dedicated short-lived
+tenant. `ABX_PUBLIC_DEMO_MAX_RUNS_PER_HOUR` bounds runs per visitor and
+`ABX_PUBLIC_DEMO_TTL_HOURS` bounds both tenant reuse and the generated read-only
+replay link. The public flow never selects a real workspace or accepts provider
+credentials.
+
+## Google Cloud scanner
+
+Configure `ABX_GCP_SCANNER_PRINCIPAL` with the hosted scanner member, for example
+`serviceAccount:scanner@host-project.iam.gserviceaccount.com`. Grant that member
+only these read roles on each project before entering its project ID on the
+integrations page:
+
+```text
+roles/iam.serviceAccountViewer
+roles/cloudasset.viewer
+roles/serviceusage.serviceUsageConsumer
+```
+
+The scanner worker resolves [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials)
+inside its own process. Prefer an attached workload identity. For a file-backed
+ADC configuration, mount the file read-only into the worker and set
+`GOOGLE_APPLICATION_CREDENTIALS` to that in-container path; never place the JSON
+contents in Compose environment variables. Jobs contain only tenant and project
+identifiers. The scanner client exposes GET requests only, stores key IDs rather
+than key material, and uses Cloud Asset IAM search for reach. Disable/delete is
+shown as guided `gcloud` commands and is not executed with the scan identity.
 
 ## Backup and restore drill
 
@@ -73,6 +105,9 @@ the release topology. Download the retained `release-provenance-<commit>`
 artifact with every promoted build and keep it with the deployment record.
 
 To reproduce the gate against locally built release images:
+
+Install Syft v1.45.1 and ensure its executable is available as `syft`, or pass
+its path with `--syft`.
 
 ```text
 python tools/release_manifest.py --output release-artifacts

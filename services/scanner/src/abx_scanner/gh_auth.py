@@ -34,7 +34,7 @@ def installation_token(
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": API_VERSION,
-            "User-Agent": "agentblackbox-scanner",
+            "User-Agent": "leaflyst-scanner",
         },
         data=b"",
     )
@@ -59,7 +59,7 @@ def installation_details(
             "Authorization": f"Bearer {token}",
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": API_VERSION,
-            "User-Agent": "agentblackbox-scanner",
+            "User-Agent": "leaflyst-scanner",
         },
     )
     with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310

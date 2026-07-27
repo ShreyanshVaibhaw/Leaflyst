@@ -1,7 +1,7 @@
 [project]
-name = "agentblackbox"
+name = "leaflyst"
 version = "0.1.0"
-description = "AgentBlackBox monorepo root (workspace only, not a package)"
+description = "Leaflyst monorepo root (workspace only, not a package)"
 requires-python = ">=3.12"
 
 [tool.uv.workspace]
@@ -55,7 +55,7 @@ files = [
 disable_error_code = ["valid-type"]
 
 [[tool.mypy.overrides]]
-module = ["boto3.*", "botocore.*", "clickhouse_connect.*", "psycopg_pool.*", "moto.*"]
+module = ["boto3.*", "botocore.*", "clickhouse_connect.*", "google.auth.*", "psycopg_pool.*", "moto.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

@@ -743,6 +743,71 @@
         "title": "GapMarker",
         "type": "object"
       },
+      "GcpConnectInfo": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "required_roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Required Roles",
+            "type": "array"
+          },
+          "scanner_principal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scanner Principal"
+          }
+        },
+        "required": [
+          "configured",
+          "scanner_principal",
+          "required_roles"
+        ],
+        "title": "GcpConnectInfo",
+        "type": "object"
+      },
+      "GcpConnectRequest": {
+        "properties": {
+          "project_id": {
+            "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$",
+            "title": "Project Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id"
+        ],
+        "title": "GcpConnectRequest",
+        "type": "object"
+      },
+      "GcpConnectResult": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "project_id",
+          "queued"
+        ],
+        "title": "GcpConnectResult",
+        "type": "object"
+      },
       "GitHubInstallLink": {
         "properties": {
           "configured": {
@@ -1565,6 +1630,86 @@
           "access"
         ],
         "title": "PermissionReach",
+        "type": "object"
+      },
+      "PublicDemoRequest": {
+        "properties": {
+          "visitor_ref": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Visitor Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visitor_ref"
+        ],
+        "title": "PublicDemoRequest",
+        "type": "object"
+      },
+      "PublicDemoResult": {
+        "properties": {
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "alert_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Alert Ids",
+            "type": "array"
+          },
+          "credential_id": {
+            "title": "Credential Id",
+            "type": "string"
+          },
+          "destructive_attempt": {
+            "title": "Destructive Attempt",
+            "type": "string"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "finding_id": {
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "sandboxed": {
+            "default": true,
+            "title": "Sandboxed",
+            "type": "boolean"
+          },
+          "scanner_warning": {
+            "title": "Scanner Warning",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "share_path": {
+            "title": "Share Path",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tenant_id",
+          "session_id",
+          "agent_id",
+          "credential_id",
+          "finding_id",
+          "alert_ids",
+          "scanner_warning",
+          "destructive_attempt",
+          "share_path",
+          "expires_at"
+        ],
+        "title": "PublicDemoResult",
         "type": "object"
       },
       "ReportAlert": {
@@ -2537,7 +2682,7 @@
     }
   },
   "info": {
-    "title": "AgentBlackBox API",
+    "title": "Leaflyst API",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
@@ -3464,6 +3609,56 @@
         "summary": "Overview"
       }
     },
+    "/v1/demo/public/run": {
+      "post": {
+        "operationId": "run_public_demo_v1_demo_public_run_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicDemoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicDemoResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Public Demo"
+      }
+    },
     "/v1/demo/run": {
       "post": {
         "operationId": "run_demo_v1_demo_run_post",
@@ -3609,6 +3804,114 @@
           }
         },
         "summary": "Ingest"
+      }
+    },
+    "/v1/integrations/gcp/connect": {
+      "post": {
+        "operationId": "gcp_connect_v1_integrations_gcp_connect_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GcpConnectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GcpConnectResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gcp Connect"
+      }
+    },
+    "/v1/integrations/gcp/connect-info": {
+      "get": {
+        "operationId": "gcp_connect_info_v1_integrations_gcp_connect_info_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GcpConnectInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Gcp Connect Info"
       }
     },
     "/v1/integrations/github/install-url": {

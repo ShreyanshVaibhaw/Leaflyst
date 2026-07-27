@@ -94,7 +94,7 @@ def main() -> int:
         base = f"http://127.0.0.1:{WEB_PORT}/api/exports/sessions/{session_id}/report"
         markdown = _read(f"{base}/md", 30)
         pdf = _read(f"{base}/pdf", 60)
-        assert markdown.startswith(b"# AgentBlackBox Incident Report")
+        assert markdown.startswith(b"# Leaflyst Incident Report")
         assert b"Chain verification" in markdown
         assert pdf.startswith(b"%PDF-") and len(pdf) > 10_000
         print(f"OK: valid Markdown ({len(markdown)} bytes) and PDF ({len(pdf)} bytes)")

@@ -21,7 +21,7 @@ from abx_api.settings import production_config_errors, settings
 from abx_api.tenant_settings import router as tenant_settings_router
 from abx_api.verify import router as verify_router
 
-app = FastAPI(title="AgentBlackBox API", version="0.1.0")
+app = FastAPI(title="Leaflyst API", version="0.1.0")
 configuration_errors = production_config_errors(settings)
 if configuration_errors:
     raise RuntimeError("unsafe production configuration: " + "; ".join(configuration_errors))

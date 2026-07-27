@@ -103,7 +103,7 @@ class GitHubRevokeAdapter:
                 "Authorization": f"Bearer {settings.github_revoke_token}",
                 "Accept": "application/vnd.github+json",
                 "X-GitHub-Api-Version": "2026-03-10",
-                "User-Agent": "agentblackbox-revocation",
+                "User-Agent": "leaflyst-revocation",
                 "Content-Type": "application/json",
             },
         )
@@ -168,13 +168,21 @@ def impact(tenant_id: str, credential_id: str) -> ImpactPreview:
         value.replace(tzinfo=UTC) < cutoff if value.tzinfo is None else value < cutoff
         for value in signals
     )
-    configured = bool(
-        settings.aws_revoke_access_key_id and settings.aws_revoke_secret_access_key
-        if credential["provider"] == "aws" else settings.github_revoke_token
-    )
-    supported = credential["kind"] in {"access_key", "fine_grained_pat", "deploy_key"}
-    commands = _guided_commands(credential)
     if credential["provider"] == "aws":
+        configured = bool(
+            settings.aws_revoke_access_key_id and settings.aws_revoke_secret_access_key
+        )
+    elif credential["provider"] == "github":
+        configured = bool(settings.github_revoke_token)
+    else:
+        configured = False
+    supported = credential["kind"] in {
+        "access_key",
+        "fine_grained_pat",
+        "deploy_key",
+    }
+    commands = _guided_commands(credential)
+    if credential["provider"] in {"aws", "gcp"}:
         next_action = "delete" if credential["status"] == "inactive" else "deactivate"
     else:
         next_action = "revoke"
@@ -197,6 +205,13 @@ def _guided_commands(credential: dict[str, Any]) -> list[str]:
         base = f"--user-name {owner} --access-key-id {fingerprint}"
         return [f"aws iam update-access-key {base} --status Inactive",
                 f"aws iam delete-access-key {base}"]
+    if credential["provider"] == "gcp" and fingerprint.startswith("gcpkey:"):
+        key_id = fingerprint.removeprefix("gcpkey:")
+        suffix = f"{key_id} --iam-account={owner} --project={credential['org']}"
+        return [
+            f"gcloud iam service-accounts keys disable {suffix}",
+            f"gcloud iam service-accounts keys delete {suffix}",
+        ]
     if fingerprint.startswith("pat:"):
         return [
             f"gh api --method POST /orgs/{credential['org']}/personal-access-tokens/"
@@ -209,7 +224,11 @@ def _guided_commands(credential: dict[str, Any]) -> list[str]:
 
 
 def adapter_for(provider: str) -> RevokeAdapter:
-    return AwsRevokeAdapter() if provider == "aws" else GitHubRevokeAdapter()
+    if provider == "aws":
+        return AwsRevokeAdapter()
+    if provider == "github":
+        return GitHubRevokeAdapter()
+    raise ValueError(f"one-click revocation is not supported for provider {provider!r}")
 
 
 @router.post("/{credential_id}", response_model=RevokeResult)

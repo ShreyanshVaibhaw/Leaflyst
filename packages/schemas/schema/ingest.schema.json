@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentblackbox.dev/schemas/ingest.schema.json",
+  "$id": "https://leaflyst.dev/schemas/ingest.schema.json",
   "title": "IngestEvent",
   "description": "The producer-facing event shape submitted by the MCP tap, SDK, or OTLP normalizer. The collector derives the canonical event from it: tenant_id comes from the ingest token (never the body), payload is redacted/truncated/digested server-side, and chain fields are computed at ingest.",
   "type": "object",

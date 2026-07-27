@@ -251,7 +251,7 @@ def _latest_anchor(
 def render_markdown(report: IncidentReport) -> str:
     valid = "VERIFIED" if report.verification.valid else "VERIFICATION FAILED"
     lines = [
-        "# AgentBlackBox Incident Report",
+        "# Leaflyst Incident Report",
         "",
         f"**Report ID:** {_md(report.report_id)}  ",
         f"**Generated:** {_md(report.generated_at)}  ",

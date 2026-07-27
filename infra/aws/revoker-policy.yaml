@@ -1,9 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: AgentBlackBox write-only access-key containment policy (never used for scanning)
+Description: Leaflyst write-only access-key containment policy (never used for scanning)
 Parameters:
   RevokerPrincipalName:
     Type: String
-    Description: Existing IAM role or user that AgentBlackBox uses only for revocation
+    Description: Existing IAM role or user that Leaflyst uses only for revocation
 Resources:
   RevokerPolicy:
     Type: AWS::IAM::ManagedPolicy

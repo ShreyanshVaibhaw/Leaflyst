@@ -1,4 +1,4 @@
-# AgentBlackBox
+# Leaflyst
 
 The flight recorder for AI agents: an independent, tamper-evident record of every action an agent takes, plus a credential graph scanner for the keys you forgot your agents had.
 
@@ -10,7 +10,7 @@ apps/web           Next.js dashboard
 packages/schemas   Canonical event schema (JSON Schema) + generated Pydantic/TS types
 packages/abx-sdk   Python SDK (LangGraph instrumentor)
 packages/abx-tap   MCP tap CLI
-services/scanner   Credential scanner workers (AWS, GitHub)
+services/scanner   Credential scanner workers (AWS, GitHub, Google Cloud)
 services/rules     Anomaly rule engine + alerts
 infra              docker compose, migrations, DDL
 demo               End-to-end demo scenario
@@ -37,8 +37,8 @@ non-root Python image. The standalone Next.js image includes the matching
 Playwright Chromium runtime used for incident-report PDFs:
 
 ```text
-docker build -f infra/docker/python.Dockerfile -t agentblackbox-python:local .
-docker build -f infra/docker/web.Dockerfile -t agentblackbox-web:local .
+docker build -f infra/docker/python.Dockerfile -t leaflyst-python:local .
+docker build -f infra/docker/web.Dockerfile -t leaflyst-web:local .
 uv run python demo/container_smoke.py
 ```
 
@@ -61,7 +61,7 @@ Open `/onboarding` to create a workspace and receive a write-only ingest token.
 `ABX_TENANT_ID` remains available as a local-development fallback. See
 [`docs/onboarding.md`](docs/onboarding.md) for the cold-start and production
 path and [`docs/integrations.md`](docs/integrations.md) for tap, SDK, OTLP,
-AWS, local-scanner, and GitHub setup.
+AWS, local-scanner, GitHub, and Google Cloud setup.
 
 Daily recording limits are assigned from the operator environment until a
 payment control plane is connected:
@@ -82,6 +82,12 @@ For the GitHub App connection flow, set `ABX_GITHUB_APP_SLUG`,
 `<API URL>/v1/integrations/github/setup`, then run the scanner worker with
 `uv run abx-scanner-worker`. Provider secrets stay in the API/worker
 environment; PostgreSQL stores installation identifiers only.
+
+Google Cloud scanning uses Application Default Credentials only inside the
+scanner worker. Set `ABX_GCP_SCANNER_PRINCIPAL` to the hosted IAM member, grant
+the read roles listed on the Integrations page, and enter a project ID to queue
+the first scan. Jobs store only project identifiers; the graph stores
+service-account key IDs and IAM reach, never token or private-key material.
 
 ## Python SDK and OTLP
 
@@ -116,4 +122,6 @@ separate `ABX_AWS_REVOKE_ACCESS_KEY_ID` and
 `infra/aws/revoker-policy.yaml`. GitHub containment uses the separate
 `ABX_GITHUB_REVOKE_TOKEN` with Personal access tokens write and repository
 Administration write. Warm credentials remain guided-only regardless of
-configuration.
+configuration. Google Cloud service-account keys are guided-only in this phase:
+the impact screen generates disable/delete commands, while the GET-only scanner
+identity has no write adapter.

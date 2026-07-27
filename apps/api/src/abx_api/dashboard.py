@@ -262,7 +262,7 @@ class IntegrationStatus(BaseModel):
 @router.get("/integrations", response_model=list[IntegrationStatus])
 def integrations(tenant_id: str) -> list[IntegrationStatus]:
     out: list[IntegrationStatus] = []
-    for provider in ("aws", "github"):
+    for provider in ("aws", "github", "gcp"):
         connection = _rows(
             "SELECT account_login FROM integration_connections "
             "WHERE tenant_id = %s AND provider = %s AND status = 'connected' "

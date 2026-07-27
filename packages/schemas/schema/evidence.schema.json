@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentblackbox.dev/schemas/evidence.schema.json",
+  "$id": "https://leaflyst.dev/schemas/evidence.schema.json",
   "title": "EvidenceRecord",
   "description": "One record in a stream-verifiable abx-evidence-v1 NDJSON export.",
   "oneOf": [

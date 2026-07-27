@@ -58,6 +58,23 @@ Configure a GitHub App with organization members, administration, repository met
 
 GitHub does not expose classic PAT inventory through the organization API; block classic PAT access with organization policy where possible.
 
+## Google Cloud
+
+Set `ABX_GCP_SCANNER_PRINCIPAL` to the IAM member used by the scanner worker,
+then grant it `roles/iam.serviceAccountViewer`, `roles/cloudasset.viewer`, and
+`roles/serviceusage.serviceUsageConsumer` on the target project. Supply
+Application Default Credentials to the worker through an attached workload
+identity or a read-only mounted ADC file. Enter the project ID under
+**Integrations** to queue a scan.
+
+The scanner calls only GET endpoints for service-account/key inventory and
+Cloud Asset IAM policy search. Redis jobs and PostgreSQL contain project IDs,
+service-account identities, key IDs, and normalized reach only—never access
+tokens, private-key data, or credential files. Google Cloud does not provide a
+key last-used timestamp, so the UI reports key age and IAM reach without
+claiming usage freshness. Disable/delete remains guided through generated
+`gcloud` commands and never reuses the read identity.
+
 ## Independent evidence verification
 
 Download **Tenant chain evidence** and verify it on any machine with Python 3.12 or newer:
@@ -66,6 +83,6 @@ Download **Tenant chain evidence** and verify it on any machine with Python 3.12
 python tools/abx_verify.py tenant-evidence.ndjson --anchor-hash <trusted-anchor-sha256>
 ```
 
-The verifier is a single standard-library file and does not contact AgentBlackBox. It recomputes every canonical event hash, checks chain order and previous-hash links from genesis, validates the checkpoint, and requires the object-lock anchor to cover that checkpoint and match a hash obtained independently from the bundle. It exits nonzero and reports the first divergent event after tampering.
+The verifier is a single standard-library file and does not contact Leaflyst. It recomputes every canonical event hash, checks chain order and previous-hash links from genesis, validates the checkpoint, and requires the object-lock anchor to cover that checkpoint and match a hash obtained independently from the bundle. It exits nonzero and reports the first divergent event after tampering.
 
 Portable bundles are schema-owned NDJSON streams pinned to the latest immutable anchor and exclude payload bodies. The verifier processes them in constant memory. They contain canonical metadata for the complete tenant chain through that anchor because intermediate events are required to prove continuity. Treat bundles as sensitive forensic records.

@@ -16,8 +16,9 @@ from dataclasses import dataclass
 import boto3
 import psycopg
 
-from abx_scanner import aws, findings, github, graph
+from abx_scanner import aws, findings, gcp, github, graph
 from abx_scanner.db import connect_raw
+from abx_scanner.gcp_client import GcpClient
 from abx_scanner.gh_client import GitHubClient
 
 
@@ -85,6 +86,41 @@ def run_github_scan(
                 principals=len({c.owner_login for c in result.credentials}),
                 credentials=len(result.credentials),
                 findings=len(fs),
+                api_calls=result.api_calls,
+            )
+        except Exception:
+            _finish_scan_run(conn, scan_run_id, 0, "failed")
+            raise
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def run_gcp_scan(
+    tenant_id: str,
+    project_id: str,
+    client: GcpClient,
+    conn: psycopg.Connection | None = None,
+) -> ScanSummary:
+    owns_conn = conn is None
+    conn = conn or connect_raw()
+    try:
+        scan_run_id = _start_scan_run(conn, tenant_id, "gcp", project_id)
+        try:
+            result = gcp.enumerate_project(client, project_id)
+            graph.persist_gcp(conn, tenant_id, result)
+            computed = findings.compute_gcp_findings(conn, tenant_id)
+            findings.persist_findings(conn, tenant_id, computed)
+            credential_count = sum(
+                len(account.keys) for account in result.service_accounts
+            )
+            _finish_scan_run(conn, scan_run_id, result.api_calls, "succeeded")
+            return ScanSummary(
+                scan_run_id=scan_run_id,
+                account_id=project_id,
+                principals=len(result.service_accounts),
+                credentials=credential_count,
+                findings=len(computed),
                 api_calls=result.api_calls,
             )
         except Exception:

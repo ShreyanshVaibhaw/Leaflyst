@@ -122,7 +122,7 @@ def upload_findings(api_url: str, token: str, body: dict[str, Any]) -> dict[str,
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run a read-only AWS scan locally")
-    parser.add_argument("--api-url", help="AgentBlackBox API URL")
+    parser.add_argument("--api-url", help="Leaflyst API URL")
     parser.add_argument("--output", action="store_true", help="print findings JSON")
     args = parser.parse_args()
     body = build_upload(enumerate_account())

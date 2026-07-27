@@ -16,6 +16,7 @@ from psycopg.types.json import Jsonb
 
 from abx_scanner.attribution import is_probable_agent
 from abx_scanner.aws import AwsScanResult, Principal
+from abx_scanner.gcp import GcpGrant, GcpKey, GcpScanResult, GcpServiceAccount
 from abx_scanner.github import GitHubScanResult
 from abx_scanner.policy import is_destructive, normalize_resource
 
@@ -84,6 +85,116 @@ def persist_github(conn: psycopg.Connection, tenant_id: str, result: GitHubScanR
             )
 
     conn.commit()
+
+
+def persist_gcp(conn: psycopg.Connection, tenant_id: str, result: GcpScanResult) -> None:
+    """Persist fingerprints and IAM reach from a read-only Google Cloud scan."""
+    provider = "gcp"
+    conn.execute(
+        "DELETE FROM permission_reaches_resource WHERE permission_id IN "
+        "(SELECT id FROM permissions WHERE tenant_id = %s AND provider = %s)",
+        (tenant_id, provider),
+    )
+    conn.execute(
+        "DELETE FROM permissions WHERE tenant_id = %s AND provider = %s",
+        (tenant_id, provider),
+    )
+
+    for account in result.service_accounts:
+        principal_id = _upsert_gcp_principal(conn, tenant_id, account)
+        agent_id = _upsert_gcp_agent(conn, tenant_id, account)
+        for key in account.keys:
+            credential_id = _upsert_gcp_credential(
+                conn, tenant_id, principal_id, key
+            )
+            conn.execute(
+                "INSERT INTO agent_holds_credential (agent_id, credential_id, inferred_from) "
+                "VALUES (%s, %s, 'scan') ON CONFLICT DO NOTHING",
+                (agent_id, credential_id),
+            )
+        for grant in account.grants:
+            _persist_gcp_permission(conn, tenant_id, principal_id, grant)
+    conn.commit()
+
+
+def _upsert_gcp_principal(
+    conn: psycopg.Connection, tenant_id: str, account: GcpServiceAccount
+) -> str:
+    row = conn.execute(
+        "INSERT INTO principals (tenant_id, provider, kind, external_id) "
+        "VALUES (%s, 'gcp', 'service_account', %s) "
+        "ON CONFLICT (tenant_id, provider, external_id) DO UPDATE SET "
+        "kind = EXCLUDED.kind RETURNING id",
+        (tenant_id, account.email),
+    ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def _upsert_gcp_agent(
+    conn: psycopg.Connection, tenant_id: str, account: GcpServiceAccount
+) -> str:
+    row = conn.execute(
+        "INSERT INTO agents (tenant_id, name, framework, environment, status, last_seen) "
+        "VALUES (%s, %s, '', 'unknown', 'active', now()) "
+        "ON CONFLICT (tenant_id, name) DO UPDATE SET last_seen = now(), status = 'active' "
+        "RETURNING id",
+        (tenant_id, f"gcp:{account.email}"),
+    ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def _upsert_gcp_credential(
+    conn: psycopg.Connection,
+    tenant_id: str,
+    principal_id: str,
+    key: GcpKey,
+) -> str:
+    status = "inactive" if key.disabled else "active"
+    row = conn.execute(
+        "INSERT INTO credentials (tenant_id, provider, kind, fingerprint, owner_principal, "
+        "created_at_provider, status, last_scanned) "
+        "VALUES (%s, 'gcp', 'service_account_key', %s, %s, %s, %s, now()) "
+        "ON CONFLICT (tenant_id, provider, fingerprint) DO UPDATE SET "
+        "created_at_provider = EXCLUDED.created_at_provider, status = EXCLUDED.status, "
+        "owner_principal = EXCLUDED.owner_principal, last_scanned = now() RETURNING id",
+        (tenant_id, key.fingerprint, principal_id, key.created_at, status),
+    ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def _persist_gcp_permission(
+    conn: psycopg.Connection,
+    tenant_id: str,
+    principal_id: str,
+    grant: GcpGrant,
+) -> None:
+    permission = conn.execute(
+        "INSERT INTO permissions (tenant_id, principal_id, provider, scope, raw) "
+        "VALUES (%s, %s, 'gcp', %s, %s) RETURNING id",
+        (
+            tenant_id,
+            principal_id,
+            grant.role,
+            Jsonb({"resource_kind": grant.resource_kind}),
+        ),
+    ).fetchone()
+    assert permission is not None
+    resource = conn.execute(
+        "INSERT INTO resources (tenant_id, provider, kind, identifier, environment) "
+        "VALUES (%s, 'gcp', %s, %s, 'unknown') "
+        "ON CONFLICT (tenant_id, provider, identifier) DO UPDATE SET "
+        "kind = EXCLUDED.kind RETURNING id",
+        (tenant_id, grant.resource_kind, grant.resource),
+    ).fetchone()
+    assert resource is not None
+    conn.execute(
+        "INSERT INTO permission_reaches_resource (permission_id, resource_id, access) "
+        "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+        (str(permission[0]), str(resource[0]), grant.access),
+    )
 
 
 def _upsert_gh_principal(

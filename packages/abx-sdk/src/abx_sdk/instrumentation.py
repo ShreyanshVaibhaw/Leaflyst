@@ -37,7 +37,7 @@ class _Run:
     root_run_id: UUID
 
 
-class AgentBlackBoxCallbackHandler(BaseCallbackHandler):
+class LeaflystCallbackHandler(BaseCallbackHandler):
     """A failure-isolated callback handler for LangChain and LangGraph."""
 
     raise_error = False
@@ -340,7 +340,7 @@ def instrument(
     provider_name: str = "langchain",
     credential_ref: str | None = None,
     exporter: SpanExporter | None = None,
-) -> AgentBlackBoxCallbackHandler:
+) -> LeaflystCallbackHandler:
     """Create the callback handler used in a LangGraph ``callbacks`` list."""
     endpoint = endpoint or os.environ.get(
         "ABX_OTLP_ENDPOINT", "http://localhost:8000/v1/otlp/traces"
@@ -370,7 +370,7 @@ def instrument(
     provider = TracerProvider(resource=resource)
     provider.add_span_processor(BatchSpanProcessor(exporter))
     tracer = provider.get_tracer("abx-sdk", "0.1.0", schema_url=sem.SCHEMA_URL)
-    return AgentBlackBoxCallbackHandler(
+    return LeaflystCallbackHandler(
         tracer,
         provider,
         agent_id=agent_id,

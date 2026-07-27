@@ -167,7 +167,7 @@ def _cleanup_tenant(dsn: str, tenant_id: str) -> None:
         )
         for table in (
             "credentials", "agents", "metering_token_daily", "metering_daily", "tenant_plans",
-            "ingest_tokens", "chain_heads"
+            "session_sequences", "ingest_tokens", "chain_heads"
         ):
             conn.execute(
                 f"DELETE FROM {table} WHERE tenant_id = %s", (tenant_id,)  # noqa: S608

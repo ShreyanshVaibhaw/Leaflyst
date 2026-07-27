@@ -1,7 +1,7 @@
-name: agentblackbox-release
+name: leaflyst-release
 
 x-python-image: &python-image
-  image: agentblackbox-python:${ABX_IMAGE_TAG:-local}
+  image: leaflyst-python:${ABX_IMAGE_TAG:-local}
   build:
     context: ..
     dockerfile: infra/docker/python.Dockerfile
@@ -28,7 +28,10 @@ x-api-environment: &api-environment
   ABX_ALLOWED_HOSTS: ${ABX_ALLOWED_HOSTS:-api,localhost,127.0.0.1}
   ABX_CORS_ORIGINS: ${ABX_CORS_ORIGINS:-http://localhost:13000}
   ABX_WEB_URL: ${ABX_WEB_URL:-http://localhost:13000}
-  ABX_DEMO_ENABLED: "false"
+  ABX_DEMO_ENABLED: ${ABX_DEMO_ENABLED:-false}
+  ABX_PUBLIC_DEMO_MAX_RUNS_PER_HOUR: ${ABX_PUBLIC_DEMO_MAX_RUNS_PER_HOUR:-5}
+  ABX_PUBLIC_DEMO_TTL_HOURS: ${ABX_PUBLIC_DEMO_TTL_HOURS:-24}
+  ABX_GCP_SCANNER_PRINCIPAL: ${ABX_GCP_SCANNER_PRINCIPAL:-}
 
 services:
   postgres:
@@ -141,6 +144,7 @@ services:
       <<: *api-environment
       ABX_GITHUB_APP_ID: ${ABX_GITHUB_APP_ID:-}
       ABX_GITHUB_PRIVATE_KEY: ${ABX_GITHUB_PRIVATE_KEY:-}
+      GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-}
     depends_on:
       api:
         condition: service_healthy
@@ -169,7 +173,7 @@ services:
     restart: unless-stopped
 
   web:
-    image: agentblackbox-web:${ABX_IMAGE_TAG:-local}
+    image: leaflyst-web:${ABX_IMAGE_TAG:-local}
     build:
       context: ..
       dockerfile: infra/docker/web.Dockerfile

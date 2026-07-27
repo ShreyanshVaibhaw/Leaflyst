@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from abx_schemas import IngestEvent
 from fastapi import APIRouter, Depends, HTTPException
 from psycopg.types.json import Jsonb
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from abx_api.alerts import evaluate_event_ids
 from abx_api.auth import require_admin
 from abx_api.ingest import ingest_events
+from abx_api.replay import ShareRequest, create_share
 from abx_api.settings import settings
 from abx_api.store import pg_pool
 
@@ -33,6 +34,15 @@ class DemoResult(BaseModel):
     scanner_warning: str
     destructive_attempt: str
     sandboxed: bool = True
+
+
+class PublicDemoRequest(BaseModel):
+    visitor_ref: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+class PublicDemoResult(DemoResult):
+    share_path: str
+    expires_at: str
 
 
 def _demo_tenant(owner_tenant_id: str) -> str:
@@ -56,6 +66,59 @@ def _demo_tenant(owner_tenant_id: str) -> str:
             (owner_tenant_id, tenant[0]),
         )
         return str(tenant[0])
+
+
+def _public_demo_tenant(visitor_ref: str) -> str:
+    now = datetime.now(UTC)
+    with pg_pool().connection() as conn:
+        conn.execute(
+            "SELECT pg_advisory_xact_lock(hashtext(%s))",
+            (f"public-demo:{visitor_ref}",),
+        )
+        existing = conn.execute(
+            "SELECT demo_tenant_id,window_started_at,runs_in_window "
+            "FROM public_demo_tenants WHERE visitor_ref=%s",
+            (visitor_ref,),
+        ).fetchone()
+        if existing is None:
+            tenant = conn.execute(
+                "INSERT INTO tenants (name) VALUES ('PocketOS public sandbox') RETURNING id"
+            ).fetchone()
+            assert tenant is not None
+            conn.execute(
+                "INSERT INTO public_demo_tenants "
+                "(visitor_ref,demo_tenant_id,runs_in_window,last_run_at,expires_at) "
+                "VALUES (%s,%s,1,%s,%s)",
+                (
+                    visitor_ref,
+                    tenant[0],
+                    now,
+                    now + timedelta(hours=settings.public_demo_ttl_hours),
+                ),
+            )
+            return str(tenant[0])
+
+        window_started_at = existing[1]
+        runs_in_window = int(existing[2])
+        if window_started_at <= now - timedelta(hours=1):
+            window_started_at = now
+            runs_in_window = 1
+        elif runs_in_window >= settings.public_demo_max_runs_per_hour:
+            raise HTTPException(status_code=429, detail="public demo rate limit exceeded")
+        else:
+            runs_in_window += 1
+        conn.execute(
+            "UPDATE public_demo_tenants SET window_started_at=%s,runs_in_window=%s,"
+            "last_run_at=%s,expires_at=%s WHERE visitor_ref=%s",
+            (
+                window_started_at,
+                runs_in_window,
+                now,
+                now + timedelta(hours=settings.public_demo_ttl_hours),
+                visitor_ref,
+            ),
+        )
+        return str(existing[0])
 
 
 def _seed_graph(tenant_id: str) -> tuple[str, str]:
@@ -143,7 +206,27 @@ def _seed_graph(tenant_id: str) -> tuple[str, str]:
 def run_demo(tenant_id: str) -> DemoResult:
     if not settings.demo_enabled:
         raise HTTPException(status_code=404, detail="demo is disabled")
-    demo_tenant_id = _demo_tenant(tenant_id)
+    return _run_for_tenant(_demo_tenant(tenant_id))
+
+
+@router.post("/public/run", response_model=PublicDemoResult)
+def run_public_demo(request: PublicDemoRequest) -> PublicDemoResult:
+    if not settings.demo_enabled:
+        raise HTTPException(status_code=404, detail="demo is disabled")
+    result = _run_for_tenant(_public_demo_tenant(request.visitor_ref))
+    share = create_share(
+        result.tenant_id,
+        result.session_id,
+        ShareRequest(expires_in_hours=settings.public_demo_ttl_hours),
+    )
+    return PublicDemoResult(
+        **result.model_dump(),
+        share_path=share.share_path,
+        expires_at=share.expires_at,
+    )
+
+
+def _run_for_tenant(demo_tenant_id: str) -> DemoResult:
     credential_id, finding_id = _seed_graph(demo_tenant_id)
     session_id = f"pocketos-{uuid.uuid4().hex[:12]}"
     event_id = uuid.uuid4()

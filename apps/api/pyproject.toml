@@ -1,7 +1,7 @@
 [project]
 name = "abx-api"
 version = "0.1.0"
-description = "AgentBlackBox API: ingest collector, app API, chain verification"
+description = "Leaflyst API: ingest collector, app API, chain verification"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",

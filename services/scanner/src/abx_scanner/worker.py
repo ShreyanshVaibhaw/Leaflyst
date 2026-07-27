@@ -12,9 +12,10 @@ from typing import Any, cast
 
 import redis
 
+from abx_scanner.gcp_client import GcpClient
 from abx_scanner.gh_auth import installation_token, now_epoch
 from abx_scanner.gh_client import GitHubClient
-from abx_scanner.scan import run_github_scan
+from abx_scanner.scan import run_gcp_scan, run_github_scan
 
 STREAM = "abx:scan_jobs"
 GROUP = "abx-scanners"
@@ -29,14 +30,18 @@ def _env(name: str) -> str:
 
 def process_job(fields: dict[str, str]) -> None:
     provider = fields.get("provider")
-    if provider != "github":
-        raise ValueError(f"unsupported scan provider: {provider}")
-    app_id = _env("ABX_GITHUB_APP_ID")
-    private_key = _env("ABX_GITHUB_PRIVATE_KEY")
-    token = installation_token(
-        app_id, private_key, fields["installation_id"], now_epoch()
-    )
-    run_github_scan(fields["tenant_id"], fields["org"], GitHubClient(token))
+    if provider == "github":
+        app_id = _env("ABX_GITHUB_APP_ID")
+        private_key = _env("ABX_GITHUB_PRIVATE_KEY")
+        token = installation_token(
+            app_id, private_key, fields["installation_id"], now_epoch()
+        )
+        run_github_scan(fields["tenant_id"], fields["org"], GitHubClient(token))
+        return
+    if provider == "gcp":
+        run_gcp_scan(fields["tenant_id"], fields["project_id"], GcpClient())
+        return
+    raise ValueError(f"unsupported scan provider: {provider}")
 
 
 def ensure_group(client: Any) -> None:

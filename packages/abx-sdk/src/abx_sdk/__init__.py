@@ -1,5 +1,5 @@
-"""AgentBlackBox LangGraph instrumentation."""
+"""Leaflyst LangGraph instrumentation."""
 
-from abx_sdk.instrumentation import AgentBlackBoxCallbackHandler, instrument
+from abx_sdk.instrumentation import LeaflystCallbackHandler, instrument
 
-__all__ = ["AgentBlackBoxCallbackHandler", "instrument"]
+__all__ = ["LeaflystCallbackHandler", "instrument"]
