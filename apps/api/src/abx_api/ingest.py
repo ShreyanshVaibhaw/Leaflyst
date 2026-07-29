@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from typing import Annotated, Any
 
+import psycopg
 from abx_schemas import IngestEvent
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -26,9 +27,16 @@ from pydantic import BaseModel, Field
 from abx_api.auth import IngestIdentity, ingest_identity_from_token
 from abx_api.chain import GENESIS_HASH, compute_event_hash, event_to_row, format_ts
 from abx_api.metering import LimitState, decide_capture
+from abx_api.payload_crypto import SealedPayload, seal
 from abx_api.redaction import redact_and_truncate
 from abx_api.settings import settings
-from abx_api.store import EVENT_COLUMNS, ch_client, pg_pool, put_payload
+from abx_api.store import (
+    EVENT_COLUMNS,
+    ch_client,
+    payload_ref_for,
+    pg_pool,
+    put_payload_batch,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -129,20 +137,21 @@ def ingest_events(
             daily_event_limit if ingest_token_id is not None and capture_payloads else None,
         )
 
-        # Redact + store payloads concurrently (S3 puts are the per-event
-        # bottleneck), then chain sequentially over the results in order.
+        # Redact and seal every payload, write them as one object, then chain
+        # sequentially over the results in order.
         prepared = prepare_events(
             tenant_id,
             events,
             capture_payloads,
             full_fidelity_payloads=capture.full_fidelity_payloads,
         )
+        write_payload_batch(conn, tenant_id, prepared)
         payloads_omitted_by_limit = capture.over_limit_payloads
-        captured_payloads = sum(payload_ref is not None for _, _, payload_ref, _, _ in prepared)
+        captured_payloads = sum(p.payload_ref is not None for p in prepared)
         rows: list[list[Any]] = []
-        for ie, digest, payload_ref, redactions, truncated in prepared:
+        for p in prepared:
             event = finalize_event(
-                tenant_id, ie, prev_hash, digest, payload_ref, redactions, truncated
+                tenant_id, p.event, prev_hash, p.digest, p.payload_ref, p.redactions, p.truncated
             )
             chain_seq += 1
             rows.append(event_to_row(event, chain_seq))
@@ -188,19 +197,40 @@ def ingest_events(
     )
 
 
-# (event, digest, payload_ref, redactions, truncated)
-_Prepared = tuple[IngestEvent, str, str | None, list[str], bool]
+@dataclass
+class PreparedEvent:
+    """An event after redaction, with its payload sealed but not yet stored."""
+
+    event: IngestEvent
+    digest: str
+    payload_ref: str | None
+    redactions: list[str]
+    truncated: bool
+    sealed: SealedPayload | None = None
 
 
-def _prepare_one(tenant_id: str, ie: IngestEvent, capture_payloads: bool) -> _Prepared:
-    """Redact -> truncate -> digest -> store body. The parallelizable, side-effecting
-    part; no chaining here (that must stay sequential)."""
+def _prepare_one(tenant_id: str, ie: IngestEvent, capture_payloads: bool) -> PreparedEvent:
+    """Redact -> truncate -> digest -> seal.
+
+    Deliberately performs no object-store call: every payload in the request is
+    written together afterwards as a single object.
+    """
     if ie.payload is None:
-        return ie, hashlib.sha256(b"").hexdigest(), None, [], False
+        return PreparedEvent(ie, hashlib.sha256(b"").hexdigest(), None, [], False)
     body, redactions, truncated = redact_and_truncate(ie.payload, settings.payload_max_bytes)
+    # The digest covers the redacted plaintext, so the chain still commits to
+    # real content and offline verification is unaffected by encryption at rest.
     digest = hashlib.sha256(body).hexdigest()
-    payload_ref = put_payload(tenant_id, str(ie.event_id), body) if capture_payloads else None
-    return ie, digest, payload_ref, redactions, truncated
+    if not capture_payloads:
+        return PreparedEvent(ie, digest, None, redactions, truncated)
+    return PreparedEvent(
+        ie,
+        digest,
+        payload_ref_for(tenant_id, str(ie.event_id)),
+        redactions,
+        truncated,
+        seal(body),
+    )
 
 
 def prepare_events(
@@ -208,27 +238,56 @@ def prepare_events(
     events: list[IngestEvent],
     capture_payloads: bool = True,
     full_fidelity_payloads: int | None = None,
-) -> list[_Prepared]:
-    """Prepare all events, preserving order. S3 puts run concurrently."""
+) -> list[PreparedEvent]:
+    """Prepare all events, preserving order.
+
+    Runs sequentially: with the per-payload object write moved out, what remains
+    is CPU-bound work under the GIL, where a thread pool only adds overhead.
+    """
     capture_slots = len(events) if full_fidelity_payloads is None else full_fidelity_payloads
-    capture_flags: list[bool] = []
+    prepared: list[PreparedEvent] = []
     for event in events:
         should_capture = capture_payloads and event.payload is not None and capture_slots > 0
-        capture_flags.append(should_capture)
         if should_capture:
             capture_slots -= 1
-    event_flags = zip(events, capture_flags, strict=True)
-    if not any(event.payload is not None and flag for event, flag in event_flags):
-        return [
-            _prepare_one(tenant_id, event, flag)
-            for event, flag in zip(events, capture_flags, strict=True)
-        ]
-    with ThreadPoolExecutor(max_workers=16) as pool:
-        return list(
-            pool.map(
-                lambda item: _prepare_one(tenant_id, item[0], item[1]),
-                zip(events, capture_flags, strict=True),
-            )
+        prepared.append(_prepare_one(tenant_id, event, should_capture))
+    return prepared
+
+
+def write_payload_batch(
+    conn: psycopg.Connection, tenant_id: str, prepared: list[PreparedEvent]
+) -> None:
+    """Write every sealed payload in the request as one object.
+
+    One request instead of one per payload: the per-payload write was ~94% of
+    ingest time. Each payload's location and wrapped key are recorded so it can
+    be read back by byte range and erased individually.
+
+    The object is written before the caller's transaction commits, so a crash
+    can only leave an unreferenced object - which retention sweeps - never a
+    segment row pointing at bytes that were never stored.
+    """
+    sealed = [(p, p.sealed) for p in prepared if p.sealed is not None]
+    if not sealed:
+        return
+    object_key, offsets = put_payload_batch(tenant_id, [s.ciphertext for _, s in sealed])
+    row = conn.execute(
+        "INSERT INTO payload_batches (tenant_id, object_key, byte_size) "
+        "VALUES (%s,%s,%s) RETURNING id",
+        (tenant_id, object_key, sum(len(s.ciphertext) for _, s in sealed)),
+    ).fetchone()
+    assert row is not None
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO payload_segments (payload_ref, tenant_id, batch_id, byte_offset,"
+            " byte_length, wrapped_key, key_nonce, data_nonce) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            [
+                (
+                    prepared_event.payload_ref, tenant_id, row[0], offset,
+                    len(s.ciphertext), s.wrapped_key, s.key_nonce, s.data_nonce,
+                )
+                for (prepared_event, s), offset in zip(sealed, offsets, strict=True)
+            ],
         )
 
 

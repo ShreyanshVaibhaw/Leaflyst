@@ -53,6 +53,14 @@ class Settings:
     payload_max_bytes: int = field(
         default_factory=lambda: int(_env("ABX_PAYLOAD_MAX_BYTES", str(32 * 1024)))
     )
+    # Wraps the per-payload data keys that make erasure a single row delete.
+    # Base64-encoded 32 bytes. The default is DEV ONLY - deployments must set
+    # this, and losing it makes every stored payload permanently unreadable.
+    payload_master_key: str = field(
+        default_factory=lambda: _env(
+            "ABX_PAYLOAD_MASTER_KEY", "ZGV2LW9ubHktcGF5bG9hZC1tYXN0ZXIta2V5LTMyYnk="
+        )
+    )
     max_batch_events: int = field(default_factory=lambda: int(_env("ABX_MAX_BATCH", "5000")))
     scan_upload_max_bytes: int = field(
         default_factory=lambda: int(_env("ABX_SCAN_UPLOAD_MAX_BYTES", str(2 * 1024 * 1024)))

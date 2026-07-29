@@ -55,6 +55,15 @@ def run_retention(now: datetime | None = None) -> int:
                         Bucket=settings.payload_bucket,
                         Delete={"Objects": expired, "Quiet": True},
                     )
+                    # Batch objects carry many payloads; drop their index rows
+                    # too. The cascade to payload_segments destroys the wrapped
+                    # data keys, so an expired batch is unreadable even if a
+                    # copy of the object survives in a backup or old version.
+                    conn.execute(
+                        "DELETE FROM payload_batches WHERE tenant_id=%s "
+                        "AND object_key = ANY(%s)",
+                        (tenant_id, [item["Key"] for item in expired]),
+                    )
                     deleted += len(expired)
     return deleted
 
