@@ -3,6 +3,15 @@ plan.md
 blueprint.md
 *explanation*.md
 
+# Generated teaching/course artifacts (not project source; also skews lint runs)
+teachme-course/
+
+# Local-only media and pitch materials - large binaries, keep out of git
+*.mp4
+*.mov
+YC-*.pdf
+*Founder-Video*
+
 # Environment / secrets
 .env
 .env.*
