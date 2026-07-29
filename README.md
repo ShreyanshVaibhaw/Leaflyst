@@ -1,6 +1,60 @@
 # Leaflyst
 
-The flight recorder for AI agents: an independent, tamper-evident record of every action an agent takes, plus a credential graph scanner for the keys you forgot your agents had.
+[![CI](https://github.com/ShreyanshVaibhaw/Leaflyst/actions/workflows/ci.yml/badge.svg)](https://github.com/ShreyanshVaibhaw/Leaflyst/actions/workflows/ci.yml)
+
+**The flight recorder and credential graph for AI agents.**
+
+Leaflyst creates an independent, tamper-evident record of agent activity and
+maps the credentials, permissions, and resources an agent can reach. When an
+incident happens, teams can reconstruct the timeline, measure the blast radius,
+and follow a guided containment workflow without trusting the agent's own logs.
+
+## Why Leaflyst
+
+Traditional application logs are often produced by the same agent being
+investigated. Leaflyst records out of band through an MCP tap, Python SDK, or
+OTLP endpoint, then redacts sensitive payloads and hash-chains the event stream.
+
+- Replay agent sessions with integrity and gap verification.
+- Scan AWS, GitHub, and Google Cloud using read-only identities.
+- Connect agents, credentials, permissions, and resources in a credential graph.
+- Evaluate blast radius before taking containment action.
+- Export evidence that can be verified without a running Leaflyst service.
+
+## Core capabilities
+
+| Area | Included |
+| --- | --- |
+| Flight recorder | MCP tap, Python SDK, OTLP ingest, payload redaction, hash-chained events, replay |
+| Credential graph | Read-only AWS, GitHub, and GCP scanning with credential and permission reach |
+| Detection | Rule-based anomalies, recording-gap detection, Slack and email alerts |
+| Response | Blast-radius analysis, incident reports, guided revocation with separate credentials |
+| Operations | Multi-tenant dashboard, usage controls, public isolated demo, standalone evidence verifier |
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["AI agent"] --> C["MCP tap / Python SDK / OTLP"]
+    C --> I["Write-only ingest API"]
+    I --> R["Redaction + hash chain"]
+    R --> S["PostgreSQL / ClickHouse / object storage"]
+    P["AWS / GitHub / GCP"] --> W["Read-only scanner"]
+    W --> G["Credential graph + blast radius"]
+    S --> D["Replay, alerts, and evidence reports"]
+    G --> D
+    D --> V["Guided containment"]
+    X["Separate revocation credentials"] --> V
+```
+
+## Security model
+
+- Recording uses write-only ingest tokens; agents cannot read or rewrite history.
+- Secret values are never stored in the credential graph.
+- Payloads are redacted before storage and encrypted with per-payload data keys.
+- Scanner credentials are read-only and never reused for revocation.
+- Tap and SDK failures degrade recording without blocking the agent.
+- Captured agent input and output is always treated as untrusted content.
 
 ## Layout
 
@@ -17,17 +71,41 @@ demo               End-to-end demo scenario
 tools/abx_verify.py Standalone standard-library evidence verifier
 ```
 
-## Development
+## Quick start
 
-```
-uv sync                                  # install python workspace
-pnpm -C apps/web install                 # install web deps
+Requirements: Python 3.12, [uv](https://docs.astral.sh/uv/), Node.js 24,
+[pnpm](https://pnpm.io/), and Docker.
+
+```bash
+uv sync --all-packages
+pnpm -C apps/web install
 docker compose -f infra/docker-compose.dev.yml up -d
-uv run python infra/migrate.py           # apply postgres migrations
-uv run python packages/schemas/scripts/codegen.py   # regenerate types after schema changes
-uv run python packages/schemas/scripts/api_contracts.py   # regenerate OpenAPI/web API types
+uv run python infra/migrate.py
+```
+
+Start the API and dashboard in separate terminals:
+
+```bash
+uv run uvicorn abx_api.main:app --reload
+pnpm -C apps/web dev
+```
+
+Open [http://localhost:3000/onboarding](http://localhost:3000/onboarding) to
+create a workspace and its write-only ingest token. The public PocketOS demo is
+available at [http://localhost:3000/demo](http://localhost:3000/demo) when
+`ABX_DEMO_ENABLED=true`.
+
+Run the complete local checks:
+
+```bash
 uv run pytest
 uv run ruff check . && uv run mypy
+uv run python packages/schemas/scripts/codegen.py --check
+uv run python packages/schemas/scripts/api_contracts.py --check
+pnpm -C apps/web lint
+pnpm -C apps/web test
+pnpm -C apps/web exec tsc --noEmit
+pnpm -C apps/web build
 ```
 
 ## Release images
