@@ -30,7 +30,14 @@ x-api-environment: &api-environment
   ABX_WEB_URL: ${ABX_WEB_URL:-http://localhost:13000}
   ABX_DEMO_ENABLED: ${ABX_DEMO_ENABLED:-false}
   ABX_PUBLIC_DEMO_MAX_RUNS_PER_HOUR: ${ABX_PUBLIC_DEMO_MAX_RUNS_PER_HOUR:-5}
+  ABX_PUBLIC_DEMO_GLOBAL_RUNS_PER_HOUR: ${ABX_PUBLIC_DEMO_GLOBAL_RUNS_PER_HOUR:-200}
+  ABX_PUBLIC_DEMO_MAX_LIVE_TENANTS: ${ABX_PUBLIC_DEMO_MAX_LIVE_TENANTS:-500}
   ABX_PUBLIC_DEMO_TTL_HOURS: ${ABX_PUBLIC_DEMO_TTL_HOURS:-24}
+  ABX_TRUSTED_PROXY_HOPS: ${ABX_TRUSTED_PROXY_HOPS:-0}
+  ABX_RATE_LIMIT_ENABLED: ${ABX_RATE_LIMIT_ENABLED:-true}
+  ABX_RATE_LIMIT_REQUESTS: ${ABX_RATE_LIMIT_REQUESTS:-600}
+  ABX_RATE_LIMIT_COSTLY_REQUESTS: ${ABX_RATE_LIMIT_COSTLY_REQUESTS:-30}
+  ABX_RATE_LIMIT_GLOBAL_REQUESTS: ${ABX_RATE_LIMIT_GLOBAL_REQUESTS:-6000}
   ABX_GCP_SCANNER_PRINCIPAL: ${ABX_GCP_SCANNER_PRINCIPAL:-}
 
 services:
@@ -119,8 +126,11 @@ services:
     <<: *python-image
     environment:
       <<: *api-environment
+    # Bound to loopback by default so the only public path is the reverse proxy
+    # on the host. Publishing on 0.0.0.0 puts the API on the internet the moment
+    # a firewall rule is wrong, which is a bad thing to depend on.
     ports:
-      - "${ABX_API_PORT:-18000}:8000"
+      - "${ABX_BIND_ADDRESS:-127.0.0.1}:${ABX_API_PORT:-18000}:8000"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -185,7 +195,7 @@ services:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}
       CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
     ports:
-      - "${ABX_WEB_PORT:-13000}:3000"
+      - "${ABX_BIND_ADDRESS:-127.0.0.1}:${ABX_WEB_PORT:-13000}:3000"
     depends_on:
       api:
         condition: service_healthy

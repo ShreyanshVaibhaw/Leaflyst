@@ -16,6 +16,7 @@ from abx_api.local_scan import router as local_scan_router
 from abx_api.normalize import router as normalize_router
 from abx_api.onboarding import router as onboarding_router
 from abx_api.policy import router as policy_router
+from abx_api.rate_limit import RateLimit
 from abx_api.replay import router as replay_router
 from abx_api.reports import router as reports_router
 from abx_api.revocation import router as revocation_router
@@ -39,6 +40,7 @@ app.add_middleware(
         "/v1/scans/local": settings.scan_upload_max_bytes,
     },
 )
+app.add_middleware(RateLimit)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

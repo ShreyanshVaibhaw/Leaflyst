@@ -60,6 +60,26 @@ def _delete_tenant_data(conn, tenant_id: str) -> None:
         conn.execute(f"DELETE FROM {table} WHERE tenant_id = %s", (tenant_id,))  # noqa: S608
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _rate_limit_off_by_default() -> Iterator[None]:
+    """Every test shares one admin key, so they share one rate-limit bucket.
+
+    Left on, the suite would start failing on whichever test happened to be the
+    six-hundredth request of the minute, which is a flake rather than a finding.
+    The limiter's own tests in test_edge_limits.py switch it back on explicitly,
+    and monkeypatch restores this default when each of them finishes.
+    """
+    from dataclasses import replace
+
+    from abx_api import rate_limit
+    from abx_api.settings import settings
+
+    original = rate_limit.settings
+    rate_limit.settings = replace(settings, rate_limit_enabled=False)
+    yield
+    rate_limit.settings = original
+
+
 @pytest.fixture
 def tenant() -> Iterator[tuple[str, str]]:
     """Create a throwaway tenant + ingest token; clean up after."""
