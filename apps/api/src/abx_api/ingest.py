@@ -21,6 +21,7 @@ from typing import Annotated, Any
 
 import psycopg
 from abx_schemas import IngestEvent
+from abx_schemas.generated.contract import CURRENT_SCHEMA_VERSION
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -52,6 +53,10 @@ class IngestResult(BaseModel):
     limit_state: LimitState
     over_limit_payload_events: int
     payloads_omitted_by_limit: int
+    # Payloads dropped because the object store was unavailable. Reported so a
+    # degraded batch is visibly degraded rather than silently thinner; the
+    # events themselves were still accepted, chained, and verify.
+    payloads_dropped_by_backpressure: int = 0
 
 
 class BatchTooLargeError(ValueError):
@@ -68,6 +73,7 @@ def ingest(
             identity.tenant_id,
             list(batch.events),
             ingest_token_id=identity.token_id,
+            operator_ref=identity.operator_ref,
         )
     except BatchTooLargeError as exc:
         raise HTTPException(status_code=413, detail="batch too large") from exc
@@ -77,6 +83,7 @@ def ingest_events(
     tenant_id: str,
     events: list[IngestEvent],
     ingest_token_id: str | None = None,
+    operator_ref: str | None = None,
 ) -> IngestResult:
     """Persist canonical events without depending on FastAPI transport models."""
     if not events:
@@ -145,13 +152,14 @@ def ingest_events(
             capture_payloads,
             full_fidelity_payloads=capture.full_fidelity_payloads,
         )
-        write_payload_batch(conn, tenant_id, prepared)
+        payloads_dropped_by_backpressure = write_payload_batch(conn, tenant_id, prepared)
         payloads_omitted_by_limit = capture.over_limit_payloads
         captured_payloads = sum(p.payload_ref is not None for p in prepared)
         rows: list[list[Any]] = []
         for p in prepared:
             event = finalize_event(
-                tenant_id, p.event, prev_hash, p.digest, p.payload_ref, p.redactions, p.truncated
+                tenant_id, p.event, prev_hash, p.digest, p.payload_ref,
+                p.redactions, p.truncated, operator_ref,
             )
             chain_seq += 1
             rows.append(event_to_row(event, chain_seq))
@@ -167,11 +175,18 @@ def ingest_events(
             "WHERE tenant_id = %s",
             (prev_hash, chain_seq, tenant_id),
         )
-        conn.execute(
-            "INSERT INTO metering_daily (tenant_id, day, events) VALUES (%s, CURRENT_DATE, %s) "
-            "ON CONFLICT (tenant_id, day) DO UPDATE SET events = metering_daily.events + %s",
-            (tenant_id, len(rows), len(rows)),
-        )
+        # Control-plane events are chained and verify like any other, but they
+        # are OUR bookkeeping, not the tenant's recording. Metering them would
+        # let issuing a token or changing a setting eat the tenant's plan
+        # allowance and degrade their agent's payload capture as a side effect.
+        metered = sum(1 for event in events if event.source.value != "admin_api")
+        if metered:
+            conn.execute(
+                "INSERT INTO metering_daily (tenant_id, day, events) "
+                "VALUES (%s, CURRENT_DATE, %s) ON CONFLICT (tenant_id, day) "
+                "DO UPDATE SET events = metering_daily.events + %s",
+                (tenant_id, metered, metered),
+            )
         if ingest_token_id is not None and captured_payloads:
             conn.execute(
                 "INSERT INTO metering_token_daily "
@@ -194,6 +209,7 @@ def ingest_events(
         limit_state=capture.limit_state,
         over_limit_payload_events=capture.over_limit_payloads,
         payloads_omitted_by_limit=payloads_omitted_by_limit,
+        payloads_dropped_by_backpressure=payloads_dropped_by_backpressure,
     )
 
 
@@ -256,7 +272,7 @@ def prepare_events(
 
 def write_payload_batch(
     conn: psycopg.Connection, tenant_id: str, prepared: list[PreparedEvent]
-) -> None:
+) -> int:
     """Write every sealed payload in the request as one object.
 
     One request instead of one per payload: the per-payload write was ~94% of
@@ -269,8 +285,21 @@ def write_payload_batch(
     """
     sealed = [(p, p.sealed) for p in prepared if p.sealed is not None]
     if not sealed:
-        return
-    object_key, offsets = put_payload_batch(tenant_id, [s.ciphertext for _, s in sealed])
+        return 0
+    try:
+        object_key, offsets = put_payload_batch(tenant_id, [s.ciphertext for _, s in sealed])
+    except Exception:
+        # Object-store backpressure. Rejecting the batch would invert the
+        # product's failure mode - the agent's recorder would start erroring
+        # while the agent itself is healthy. Instead the batch degrades to
+        # metadata-only: events still redact, digest, chain, and verify, and
+        # payload_digest still commits to real content, so the record stays
+        # trustworthy and only the retrievable body is lost.
+        logger.exception("payload object store unavailable for tenant %s", tenant_id)
+        for prepared_event, _ in sealed:
+            prepared_event.payload_ref = None
+            prepared_event.sealed = None
+        return len(sealed)
     row = conn.execute(
         "INSERT INTO payload_batches (tenant_id, object_key, byte_size) "
         "VALUES (%s,%s,%s) RETURNING id",
@@ -280,15 +309,18 @@ def write_payload_batch(
     with conn.cursor() as cur:
         cur.executemany(
             "INSERT INTO payload_segments (payload_ref, tenant_id, batch_id, byte_offset,"
-            " byte_length, wrapped_key, key_nonce, data_nonce) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            " byte_length, wrapped_key, key_nonce, data_nonce, master_key_id) "
+            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
             [
                 (
                     prepared_event.payload_ref, tenant_id, row[0], offset,
                     len(s.ciphertext), s.wrapped_key, s.key_nonce, s.data_nonce,
+                    s.master_key_id,
                 )
                 for (prepared_event, s), offset in zip(sealed, offsets, strict=True)
             ],
         )
+    return 0
 
 
 def finalize_event(
@@ -299,9 +331,17 @@ def finalize_event(
     payload_ref: str | None,
     redactions: list[str],
     truncated: bool,
+    operator_ref: str | None = None,
 ) -> dict[str, Any]:
-    """Assemble the canonical event and compute its hash (sequential, per-chain)."""
+    """Assemble the canonical event and compute its hash (sequential, per-chain).
+
+    Written at CURRENT_SCHEMA_VERSION. operator_ref comes from the ingest token,
+    never from the producer body: an agent must not be able to name the human
+    it is recorded against.
+    """
     event: dict[str, Any] = {
+        "schema_version": CURRENT_SCHEMA_VERSION,
+        "operator_ref": operator_ref,
         "event_id": str(ie.event_id),
         "tenant_id": tenant_id,
         "agent_id": ie.agent_id,

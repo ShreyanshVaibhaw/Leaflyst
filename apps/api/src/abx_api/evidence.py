@@ -10,12 +10,12 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 
-from abx_api.auth import require_admin
 from abx_api.chain import row_to_event
+from abx_api.rbac import require_export
 from abx_api.settings import settings
 from abx_api.store import ch_client, pg_pool, s3_client
 
-router = APIRouter(prefix="/v1/evidence", dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/v1/evidence", dependencies=[Depends(require_export)])
 PAGE_SIZE = 5_000
 
 

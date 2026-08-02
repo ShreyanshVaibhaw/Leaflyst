@@ -307,6 +307,107 @@
         "title": "ChannelUpdate",
         "type": "object"
       },
+      "CompliancePack": {
+        "properties": {
+          "anchor": {
+            "additionalProperties": true,
+            "title": "Anchor",
+            "type": "object"
+          },
+          "article_12_mapping": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Article 12 Mapping",
+            "type": "array"
+          },
+          "chain": {
+            "additionalProperties": true,
+            "title": "Chain",
+            "type": "object"
+          },
+          "draft_standards": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Draft Standards",
+            "type": "array"
+          },
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "manifest_digest": {
+            "title": "Manifest Digest",
+            "type": "string"
+          },
+          "operator_roster": {
+            "items": {
+              "$ref": "#/components/schemas/OperatorEntry"
+            },
+            "title": "Operator Roster",
+            "type": "array"
+          },
+          "period": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Period",
+            "type": "object"
+          },
+          "redaction_policy": {
+            "additionalProperties": true,
+            "title": "Redaction Policy",
+            "type": "object"
+          },
+          "retention_policy": {
+            "additionalProperties": true,
+            "title": "Retention Policy",
+            "type": "object"
+          },
+          "scope_note": {
+            "title": "Scope Note",
+            "type": "string"
+          },
+          "tenant_id": {
+            "title": "Tenant Id",
+            "type": "string"
+          },
+          "verification": {
+            "additionalProperties": true,
+            "title": "Verification",
+            "type": "object"
+          }
+        },
+        "required": [
+          "format",
+          "tenant_id",
+          "generated_at",
+          "period",
+          "chain",
+          "operator_roster",
+          "retention_policy",
+          "redaction_policy",
+          "anchor",
+          "verification",
+          "article_12_mapping",
+          "draft_standards",
+          "scope_note",
+          "manifest_digest"
+        ],
+        "title": "CompliancePack",
+        "type": "object"
+      },
       "CredentialDetail": {
         "properties": {
           "created_at": {
@@ -487,6 +588,106 @@
         "title": "CredentialSummary",
         "type": "object"
       },
+      "DecisionRequest": {
+        "properties": {
+          "agent_id": {
+            "default": "",
+            "maxLength": 256,
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "credential_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Ref"
+          },
+          "operation": {
+            "default": "",
+            "maxLength": 512,
+            "title": "Operation",
+            "type": "string"
+          },
+          "resource_refs": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 256,
+            "title": "Resource Refs",
+            "type": "array"
+          },
+          "tool_name": {
+            "default": "",
+            "maxLength": 256,
+            "title": "Tool Name",
+            "type": "string"
+          }
+        },
+        "title": "DecisionRequest",
+        "type": "object"
+      },
+      "DecisionView": {
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "degraded": {
+            "title": "Degraded",
+            "type": "boolean"
+          },
+          "effect": {
+            "title": "Effect",
+            "type": "string"
+          },
+          "enforcement_enabled": {
+            "title": "Enforcement Enabled",
+            "type": "boolean"
+          },
+          "policy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Id"
+          },
+          "policy_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Version"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "effect",
+          "allowed",
+          "policy_id",
+          "policy_version",
+          "reason",
+          "degraded",
+          "enforcement_enabled"
+        ],
+        "title": "DecisionView",
+        "type": "object"
+      },
       "DemoResult": {
         "properties": {
           "agent_id": {
@@ -542,6 +743,14 @@
         ],
         "title": "DemoResult",
         "type": "object"
+      },
+      "Effect": {
+        "enum": [
+          "allow",
+          "deny"
+        ],
+        "title": "Effect",
+        "type": "string"
       },
       "EventType": {
         "enum": [
@@ -1195,6 +1404,11 @@
             "title": "Over Limit Payload Events",
             "type": "integer"
           },
+          "payloads_dropped_by_backpressure": {
+            "default": 0,
+            "title": "Payloads Dropped By Backpressure",
+            "type": "integer"
+          },
           "payloads_omitted_by_limit": {
             "title": "Payloads Omitted By Limit",
             "type": "integer"
@@ -1480,6 +1694,15 @@
         "title": "MemberView",
         "type": "object"
       },
+      "OnError": {
+        "description": "What a policy does when evaluation itself fails.",
+        "enum": [
+          "allow",
+          "deny"
+        ],
+        "title": "OnError",
+        "type": "string"
+      },
       "Operation": {
         "additionalProperties": false,
         "properties": {
@@ -1534,6 +1757,59 @@
           "outcome"
         ],
         "title": "Operation",
+        "type": "object"
+      },
+      "OperatorEntry": {
+        "properties": {
+          "events": {
+            "title": "Events",
+            "type": "integer"
+          },
+          "operator_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator Ref"
+          },
+          "sessions": {
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "unattributed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unattributed Reason"
+          },
+          "user_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Ref"
+          }
+        },
+        "required": [
+          "operator_ref",
+          "user_ref",
+          "events",
+          "sessions"
+        ],
+        "title": "OperatorEntry",
         "type": "object"
       },
       "Outcome": {
@@ -1632,6 +1908,132 @@
         "title": "PermissionReach",
         "type": "object"
       },
+      "PolicyUpsert": {
+        "properties": {
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "effect": {
+            "$ref": "#/components/schemas/Effect"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "match_agents": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Match Agents",
+            "type": "array"
+          },
+          "match_destructive": {
+            "default": false,
+            "title": "Match Destructive",
+            "type": "boolean"
+          },
+          "match_operations": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Match Operations",
+            "type": "array"
+          },
+          "match_resource_prefixes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Match Resource Prefixes",
+            "type": "array"
+          },
+          "match_tools": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Match Tools",
+            "type": "array"
+          },
+          "on_error": {
+            "$ref": "#/components/schemas/OnError",
+            "default": "allow"
+          },
+          "policy_id": {
+            "maxLength": 64,
+            "minLength": 2,
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "priority": {
+            "default": 100,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policy_id",
+          "effect"
+        ],
+        "title": "PolicyUpsert",
+        "type": "object"
+      },
+      "PolicyView": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "effect": {
+            "title": "Effect",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "on_error": {
+            "title": "On Error",
+            "type": "string"
+          },
+          "policy_id": {
+            "title": "Policy Id",
+            "type": "string"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policy_id",
+          "version",
+          "effect",
+          "enabled",
+          "on_error",
+          "priority",
+          "description",
+          "created_at"
+        ],
+        "title": "PolicyView",
+        "type": "object"
+      },
       "PublicDemoRequest": {
         "properties": {
           "visitor_ref": {
@@ -1710,6 +2112,32 @@
           "expires_at"
         ],
         "title": "PublicDemoResult",
+        "type": "object"
+      },
+      "ReadTokenCreate": {
+        "properties": {
+          "label": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "viewer",
+              "responder",
+              "admin",
+              "auditor"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "role"
+        ],
+        "title": "ReadTokenCreate",
         "type": "object"
       },
       "ReportAlert": {
@@ -2125,6 +2553,10 @@
             "title": "Capture Payloads",
             "type": "boolean"
           },
+          "compliance_mode": {
+            "title": "Compliance Mode",
+            "type": "boolean"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -2149,6 +2581,10 @@
           },
           "retention_days": {
             "title": "Retention Days",
+            "type": "integer"
+          },
+          "retention_floor_days": {
+            "title": "Retention Floor Days",
             "type": "integer"
           },
           "tenant_id": {
@@ -2178,6 +2614,8 @@
           "tokens",
           "retention_days",
           "capture_payloads",
+          "compliance_mode",
+          "retention_floor_days",
           "redaction_rules",
           "plan_key",
           "usage"
@@ -2392,6 +2830,17 @@
             "minLength": 1,
             "title": "Label",
             "type": "string"
+          },
+          "operator_user_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator User Ref"
           }
         },
         "required": [
@@ -2759,6 +3208,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2812,6 +3271,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2861,6 +3330,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -2920,6 +3399,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -2982,6 +3471,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -3063,6 +3562,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3090,6 +3599,147 @@
         "summary": "Verify"
       }
     },
+    "/v1/compliance/controls": {
+      "get": {
+        "description": "SOC 2 / ISO 42001 control evidence collected from live behaviour.\n\nExercises the controls rather than reporting configuration: a check that\nreads settings back proves nothing an attacker could not also have changed.\nNot tenant-scoped - these are platform controls, so no tenant_id is taken\nand none is leaked.",
+        "operationId": "control_report_v1_compliance_controls_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Control Report V1 Compliance Controls Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Control Report"
+      }
+    },
+    "/v1/compliance/pack": {
+      "get": {
+        "description": "Manifest for an Article 12 evidence pack covering a date range.",
+        "operationId": "compliance_pack_v1_compliance_pack_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_from",
+            "required": true,
+            "schema": {
+              "title": "Period From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period_to",
+            "required": true,
+            "schema": {
+              "title": "Period To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompliancePack"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compliance Pack"
+      }
+    },
     "/v1/dashboard/credentials": {
       "get": {
         "operationId": "credentials_list_v1_dashboard_credentials_get",
@@ -3110,6 +3760,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -3172,6 +3832,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -3271,6 +3941,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3324,6 +4004,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3373,6 +4063,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3420,6 +4120,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -3480,6 +4190,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3527,6 +4247,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -3582,6 +4312,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3614,12 +4354,32 @@
         "operationId": "run_public_demo_v1_demo_public_run_post",
         "parameters": [
           {
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
             "in": "header",
             "name": "x-abx-admin-key",
             "required": false,
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -3681,6 +4441,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3729,6 +4499,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -3828,6 +4608,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -3887,6 +4677,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -3934,6 +4734,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -3994,6 +4804,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4026,12 +4846,32 @@
         "operationId": "bootstrap_v1_onboarding_bootstrap_post",
         "parameters": [
           {
+            "in": "query",
+            "name": "tenant_id",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
             "in": "header",
             "name": "x-abx-admin-key",
             "required": false,
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -4109,6 +4949,207 @@
         "summary": "Otlp Traces"
       }
     },
+    "/v1/policy": {
+      "get": {
+        "operationId": "list_policies_v1_policy_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PolicyView"
+                  },
+                  "title": "Response List Policies V1 Policy Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Policies"
+      },
+      "put": {
+        "description": "Write a NEW VERSION rather than overwriting.\n\nA customer must be able to prove which policy was in force at any past\nmoment, so history is retained the same way the event log retains events.",
+        "operationId": "upsert_policy_v1_policy_put",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upsert Policy"
+      }
+    },
+    "/v1/policy/decide": {
+      "post": {
+        "description": "Evaluate one action. Never raises: a failure here is a decision, not a 500.",
+        "operationId": "decide_action_v1_policy_decide_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Decide Action"
+      }
+    },
     "/v1/replay/agents": {
       "get": {
         "operationId": "agents_v1_replay_agents_get",
@@ -4129,6 +5170,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -4193,6 +5244,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4253,6 +5314,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -4317,6 +5388,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4375,6 +5456,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4431,6 +5522,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -4493,6 +5594,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -4602,6 +5713,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4660,6 +5781,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4716,6 +5847,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -4784,6 +5925,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -4896,6 +6047,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -4943,6 +6104,16 @@
               "title": "X-Abx-Admin-Key",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -4980,6 +6151,149 @@
         "summary": "Update Settings"
       }
     },
+    "/v1/settings/read-tokens": {
+      "post": {
+        "description": "Mint a tenant-BOUND read token with an explicit role.\n\nReplaces reaching for the shared operator key. The token carries its tenant,\nso it cannot be pointed at another one, and its role, so an auditor handed\none cannot change anything.",
+        "operationId": "create_read_token_v1_settings_read_tokens_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadTokenCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Read Token"
+      }
+    },
+    "/v1/settings/read-tokens/{token_id}/revoke": {
+      "post": {
+        "operationId": "revoke_read_token_v1_settings_read_tokens__token_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Token Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-abx-admin-key",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Revoke Read Token V1 Settings Read Tokens  Token Id  Revoke Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Read Token"
+      }
+    },
     "/v1/settings/tokens": {
       "post": {
         "operationId": "create_token_v1_settings_tokens_post",
@@ -5000,6 +6314,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -5082,6 +6406,16 @@
             "schema": {
               "default": "",
               "title": "X-Abx-Admin-Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }

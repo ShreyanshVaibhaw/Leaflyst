@@ -5,6 +5,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from abx_api.alerts import router as alerts_router
 from abx_api.body_limit import RequestBodyLimit
+from abx_api.compliance import router as compliance_router
 from abx_api.dashboard import router as dashboard_router
 from abx_api.demo import router as demo_router
 from abx_api.evidence import router as evidence_router
@@ -14,6 +15,7 @@ from abx_api.integrations import router as integrations_router
 from abx_api.local_scan import router as local_scan_router
 from abx_api.normalize import router as normalize_router
 from abx_api.onboarding import router as onboarding_router
+from abx_api.policy import router as policy_router
 from abx_api.replay import router as replay_router
 from abx_api.reports import router as reports_router
 from abx_api.revocation import router as revocation_router
@@ -56,5 +58,7 @@ app.include_router(demo_router)
 app.include_router(local_scan_router)
 app.include_router(onboarding_router)
 app.include_router(evidence_router)
+app.include_router(compliance_router)
+app.include_router(policy_router)
 app.include_router(tenant_settings_router)
 app.include_router(health_router)

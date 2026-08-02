@@ -13,24 +13,47 @@ from typing import Any
 
 GENESIS_HASH = hashlib.sha256(b"").hexdigest()
 # BEGIN GENERATED HASHED FIELDS
-HASHED_FIELDS = [
-    "event_id",
-    "tenant_id",
-    "agent_id",
-    "session_id",
-    "seq",
-    "ts",
-    "source",
-    "event_type",
-    "operation",
-    "credential_ref",
-    "resource_refs",
-    "payload_digest",
-    "payload_ref",
-    "payload_truncated",
-    "redactions",
-    "prev_hash",
-]
+HASHED_FIELDS_BY_VERSION = {
+    1: [
+        "event_id",
+        "tenant_id",
+        "agent_id",
+        "session_id",
+        "seq",
+        "ts",
+        "source",
+        "event_type",
+        "operation",
+        "credential_ref",
+        "resource_refs",
+        "payload_digest",
+        "payload_ref",
+        "payload_truncated",
+        "redactions",
+        "prev_hash",
+    ],
+    2: [
+        "agent_id",
+        "credential_ref",
+        "event_id",
+        "event_type",
+        "operation",
+        "operator_ref",
+        "payload_digest",
+        "payload_ref",
+        "payload_truncated",
+        "prev_hash",
+        "redactions",
+        "resource_refs",
+        "schema_version",
+        "seq",
+        "session_id",
+        "source",
+        "tenant_id",
+        "ts",
+    ],
+}
+CURRENT_SCHEMA_VERSION = 2
 # END GENERATED HASHED FIELDS
 
 
@@ -45,9 +68,27 @@ class Verification:
     message: str
 
 
+def hashed_fields_for(event: dict[str, Any]) -> list[str]:
+    """The field set this event is hashed under, chosen by its own version.
+
+    An event with no schema_version is version 1, the original field set. From
+    version 2 the version is itself hashed, so stripping or forging it changes
+    the computed hash and fails verification rather than switching how the
+    event is read. This is what lets one evidence stream contain events written
+    before and after a schema change and still verify as a single chain.
+    """
+    version = event.get("schema_version", 1)
+    if not isinstance(version, int) or isinstance(version, bool):
+        raise ValueError("schema_version must be an integer")
+    fields = HASHED_FIELDS_BY_VERSION.get(version)
+    if fields is None:
+        raise ValueError(f"unknown canonical event schema version {version}")
+    return fields
+
+
 def event_hash(event: dict[str, Any]) -> str:
     canonical = json.dumps(
-        {field: event[field] for field in HASHED_FIELDS},
+        {field: event[field] for field in hashed_fields_for(event)},
         sort_keys=True,
         separators=(",", ":"),
     ).encode()

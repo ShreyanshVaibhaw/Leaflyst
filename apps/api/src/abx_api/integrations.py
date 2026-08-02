@@ -16,7 +16,7 @@ from fastapi.responses import RedirectResponse
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from abx_api.auth import require_admin
+from abx_api.rbac import require_configure
 from abx_api.scan_queue import enqueue_gcp_scan, enqueue_github_scan
 from abx_api.settings import settings
 from abx_api.store import pg_pool
@@ -91,7 +91,7 @@ def parse_state(state: str, now: int | None = None) -> str:
 @router.get(
     "/github/install-url",
     response_model=GitHubInstallLink,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_configure)],
 )
 def github_install_url(tenant_id: str) -> GitHubInstallLink:
     if not settings.github_app_slug:
@@ -108,7 +108,7 @@ def github_install_url(tenant_id: str) -> GitHubInstallLink:
 @router.get(
     "/gcp/connect-info",
     response_model=GcpConnectInfo,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_configure)],
 )
 def gcp_connect_info(tenant_id: str) -> GcpConnectInfo:
     del tenant_id
@@ -123,7 +123,7 @@ def gcp_connect_info(tenant_id: str) -> GcpConnectInfo:
 @router.post(
     "/gcp/connect",
     response_model=GcpConnectResult,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_configure)],
 )
 def gcp_connect(tenant_id: str, request: GcpConnectRequest) -> GcpConnectResult:
     if not settings.gcp_scanner_principal:
@@ -132,6 +132,24 @@ def gcp_connect(tenant_id: str, request: GcpConnectRequest) -> GcpConnectResult:
             detail="Google Cloud scanner principal is not configured",
         )
     with pg_pool().connection() as conn:
+        # The GCP scanner authenticates with ONE deployment-wide principal, so
+        # a project connected by another tenant would have that tenant's
+        # findings written into this one. Project ids are guessable, which
+        # makes claiming someone else's project a cross-tenant read. Refuse
+        # before writing anything or queueing a scan.
+        owner = conn.execute(
+            "SELECT tenant_id FROM integration_connections "
+            "WHERE provider='gcp' AND external_id=%s AND status='connected'",
+            (request.project_id,),
+        ).fetchone()
+        if owner is not None and str(owner[0]) != tenant_id:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "this Google Cloud project is already connected to another "
+                    "workspace; disconnect it there first"
+                ),
+            )
         conn.execute(
             "INSERT INTO integration_connections "
             "(tenant_id, provider, external_id, account_login, status, metadata) "

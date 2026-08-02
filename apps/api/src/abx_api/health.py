@@ -29,6 +29,7 @@ def readyz() -> JSONResponse:
         "clickhouse": check_clickhouse,
         "redis": check_redis,
         "object_store": check_object_store,
+        "payload_keyring": check_payload_keyring,
     }
     dependencies = {
         name: "ok" if _safe_check(check) else "unavailable"
@@ -39,6 +40,19 @@ def readyz() -> JSONResponse:
         status_code=200 if ready else 503,
         content={"status": "ready" if ready else "not_ready", "dependencies": dependencies},
     )
+
+
+def check_payload_keyring() -> bool:
+    """Every master key that stored payloads reference is configured.
+
+    Readiness rather than import time: it needs the database, and readiness is
+    what gates a rollout. A missing key would otherwise first surface as an
+    unreadable payload during an incident, which is precisely when it must
+    not.
+    """
+    from abx_api.key_rotation import unreadable_segments
+
+    return not unreadable_segments()
 
 
 def _safe_check(check: Callable[[], bool]) -> bool:

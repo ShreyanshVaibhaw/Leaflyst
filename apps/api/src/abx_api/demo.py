@@ -11,13 +11,13 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
 from abx_api.alerts import evaluate_event_ids
-from abx_api.auth import require_admin
 from abx_api.ingest import ingest_events
+from abx_api.rbac import require_configure
 from abx_api.replay import ShareRequest, create_share
 from abx_api.settings import settings
 from abx_api.store import pg_pool
 
-router = APIRouter(prefix="/v1/demo", dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/v1/demo", dependencies=[Depends(require_configure)])
 
 FINGERPRINT = "AKIA-DEMO-POCKETOS"
 AGENT = "pocketos-sandbox"

@@ -14,8 +14,8 @@ from typing import Annotated, Literal, TypedDict
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from abx_api.auth import require_admin
 from abx_api.chain import GENESIS_HASH, row_to_event, verify_chain
+from abx_api.rbac import require_read
 from abx_api.settings import settings
 from abx_api.store import ch_client, pg_pool, s3_client
 
@@ -41,7 +41,7 @@ class VerifyResult(BaseModel):
 
 
 @router.get(
-    "/v1/chain/verify", response_model=VerifyResult, dependencies=[Depends(require_admin)]
+    "/v1/chain/verify", response_model=VerifyResult, dependencies=[Depends(require_read)]
 )
 def verify(
     tenant_id: str,

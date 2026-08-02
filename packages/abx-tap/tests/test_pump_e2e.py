@@ -104,6 +104,86 @@ def test_unparseable_lines_pass_through(tmp_path: Path) -> None:
     proc.wait(timeout=10)
 
 
+MODERN = "2026-07-28"
+MODERN_META = {
+    "io.modelcontextprotocol/protocolVersion": MODERN,
+    "io.modelcontextprotocol/clientInfo": {"name": "E2EClient", "version": "1.0.0"},
+    "io.modelcontextprotocol/clientCapabilities": {},
+}
+
+
+def spooled_events(spool_dir: Path) -> list[dict]:
+    batches = list(spool_dir.glob("batch-*.json"))
+    return [e for b in batches for e in json.loads(b.read_text())["events"]]
+
+
+def test_modern_session_records_protocol_without_handshake(tmp_path: Path) -> None:
+    """The 2026-07-28 revision removed initialize. A full session must still
+    record its protocol version, server identity, and tool inventory."""
+    proc = start_tap(tmp_path)
+    try:
+        discover = rpc(proc, {"jsonrpc": "2.0", "id": "d1", "method": "server/discover",
+                              "params": {"_meta": MODERN_META}})
+        assert discover["result"]["supportedVersions"] == [MODERN, "2025-11-25"]
+
+        tools = rpc(proc, {"jsonrpc": "2.0", "id": 1, "method": "tools/list",
+                           "params": {"_meta": MODERN_META}})
+        assert [t["name"] for t in tools["result"]["tools"]] == ["echo", "read_file"]
+        assert tools["result"]["resultType"] == "complete"
+
+        call = rpc(proc, {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                          "params": {"name": "echo", "arguments": {"path": "/tmp/f"},
+                                     "_meta": MODERN_META}})
+        assert call["result"]["content"][0]["text"] == json.dumps({"path": "/tmp/f"})
+    finally:
+        proc.stdin.close()
+        assert proc.wait(timeout=10) == 0
+
+    refs = [r for e in spooled_events(tmp_path) for r in e["resource_refs"]]
+    assert f"abx:mcp-protocol:{MODERN}" in refs
+    assert "abx:mcp-era:modern" in refs
+    assert "abx:mcp-server-claimed:fake@1.0" in refs
+    assert f"abx:mcp-supported:{MODERN},2025-11-25" in refs
+    assert any(r.startswith("abx:tool-inventory:") for r in refs)
+
+
+def test_legacy_session_still_records_its_protocol(tmp_path: Path) -> None:
+    """Mixed fleets are normal for at least the twelve-month deprecation
+    window, so the legacy path must keep working untouched."""
+    proc = start_tap(tmp_path)
+    try:
+        rpc(proc, {"jsonrpc": "2.0", "id": 0, "method": "initialize",
+                   "params": {"protocolVersion": "2025-11-25", "capabilities": {}}})
+        drain_notification(proc)
+        rpc(proc, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    finally:
+        proc.stdin.close()
+        assert proc.wait(timeout=10) == 0
+
+    refs = [r for e in spooled_events(tmp_path) for r in e["resource_refs"]]
+    assert "abx:mcp-protocol:2025-11-25" in refs
+    assert "abx:mcp-era:legacy" in refs
+
+
+def test_modern_latency_overhead_under_20ms(tmp_path: Path) -> None:
+    """Parsing per-request `_meta` on every message must not cost the budget."""
+    proc = start_tap(tmp_path)
+    try:
+        samples = []
+        for i in range(200):
+            start = time.perf_counter()
+            rpc(proc, {"jsonrpc": "2.0", "id": 100 + i, "method": "tools/call",
+                       "params": {"name": "echo", "arguments": {"i": i},
+                                  "_meta": MODERN_META}})
+            samples.append((time.perf_counter() - start) * 1000)
+
+        p95 = statistics.quantiles(samples, n=20)[-1]
+        assert p95 < 20, f"modern p95 round trip {p95:.2f}ms exceeds 20ms budget"
+    finally:
+        proc.stdin.close()
+        proc.wait(timeout=10)
+
+
 def test_latency_overhead_under_20ms(tmp_path: Path) -> None:
     proc = start_tap(tmp_path)
     try:

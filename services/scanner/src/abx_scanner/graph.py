@@ -9,6 +9,7 @@ of duplicating. Credentials store fingerprints only - never secret values.
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from typing import Any
 
 import psycopg
@@ -16,9 +17,17 @@ from psycopg.types.json import Jsonb
 
 from abx_scanner.attribution import is_probable_agent
 from abx_scanner.aws import AwsScanResult, Principal
+from abx_scanner.azure import (
+    AzureCredential,
+    AzureRoleAssignment,
+    AzureScanResult,
+    AzureServicePrincipal,
+)
 from abx_scanner.gcp import GcpGrant, GcpKey, GcpScanResult, GcpServiceAccount
 from abx_scanner.github import GitHubScanResult
 from abx_scanner.policy import is_destructive, normalize_resource
+from abx_scanner.slack import SlackScanResult
+from abx_scanner.workspace import WorkspaceScanResult
 
 _AGENTY_LOGIN = re.compile(
     r"(?i)(svc|service|agent|bot|mcp|worker|automation|deploy|langgraph|langchain)"
@@ -353,3 +362,276 @@ def _persist_permissions(
                 "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
                 (perm_id, str(res_row[0]), access),
             )
+
+
+def persist_azure(
+    conn: psycopg.Connection, tenant_id: str, result: AzureScanResult
+) -> None:
+    """Persist fingerprints and role reach from a read-only Entra/Azure scan."""
+    provider = "azure"
+    conn.execute(
+        "DELETE FROM permission_reaches_resource WHERE permission_id IN "
+        "(SELECT id FROM permissions WHERE tenant_id = %s AND provider = %s)",
+        (tenant_id, provider),
+    )
+    conn.execute(
+        "DELETE FROM permissions WHERE tenant_id = %s AND provider = %s",
+        (tenant_id, provider),
+    )
+
+    for principal in result.service_principals:
+        principal_id = _upsert_azure_principal(conn, tenant_id, principal)
+        agent_id = _upsert_azure_agent(conn, tenant_id, principal)
+        for credential in principal.credentials:
+            credential_id = _upsert_azure_credential(
+                conn, tenant_id, principal_id, principal, credential
+            )
+            conn.execute(
+                "INSERT INTO agent_holds_credential (agent_id, credential_id, inferred_from) "
+                "VALUES (%s, %s, 'scan') ON CONFLICT DO NOTHING",
+                (agent_id, credential_id),
+            )
+        for assignment in principal.assignments:
+            _persist_azure_permission(conn, tenant_id, principal_id, assignment)
+    conn.commit()
+
+
+def _upsert_azure_principal(
+    conn: psycopg.Connection, tenant_id: str, principal: AzureServicePrincipal
+) -> str:
+    row = conn.execute(
+        "INSERT INTO principals (tenant_id, provider, kind, external_id) "
+        "VALUES (%s, 'azure', 'service_principal', %s) "
+        "ON CONFLICT (tenant_id, provider, external_id) DO UPDATE SET "
+        "kind = EXCLUDED.kind RETURNING id",
+        (tenant_id, principal.object_id),
+    ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def _upsert_azure_agent(
+    conn: psycopg.Connection, tenant_id: str, principal: AzureServicePrincipal
+) -> str:
+    label = principal.display_name or principal.app_id or principal.object_id
+    row = conn.execute(
+        "INSERT INTO agents (tenant_id, name, framework, environment, status, last_seen) "
+        "VALUES (%s, %s, '', 'unknown', 'active', now()) "
+        "ON CONFLICT (tenant_id, name) DO UPDATE SET last_seen = now(), status = 'active' "
+        "RETURNING id",
+        (tenant_id, f"azure:{label}"),
+    ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def _upsert_azure_credential(
+    conn: psycopg.Connection,
+    tenant_id: str,
+    principal_id: str,
+    principal: AzureServicePrincipal,
+    credential: AzureCredential,
+) -> str:
+    # Expired or disabled reads as inactive: an expired secret cannot be used,
+    # and reporting it active would overstate live exposure.
+    expired = credential.expires_at is not None and credential.expires_at <= datetime.now(UTC)
+    status = "inactive" if (principal.disabled or expired) else "active"
+    row = conn.execute(
+        "INSERT INTO credentials (tenant_id, provider, kind, fingerprint, owner_principal, "
+        "created_at_provider, status, last_scanned) "
+        "VALUES (%s, 'azure', %s, %s, %s, %s, %s, now()) "
+        "ON CONFLICT (tenant_id, provider, fingerprint) DO UPDATE SET "
+        "created_at_provider = EXCLUDED.created_at_provider, status = EXCLUDED.status, "
+        "owner_principal = EXCLUDED.owner_principal, last_scanned = now() RETURNING id",
+        (
+            tenant_id, credential.kind, credential.fingerprint, principal_id,
+            credential.created_at, status,
+        ),
+    ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def _persist_azure_permission(
+    conn: psycopg.Connection,
+    tenant_id: str,
+    principal_id: str,
+    assignment: AzureRoleAssignment,
+) -> None:
+    permission = conn.execute(
+        "INSERT INTO permissions (tenant_id, principal_id, provider, scope, raw) "
+        "VALUES (%s, %s, 'azure', %s, %s) RETURNING id",
+        (
+            tenant_id,
+            principal_id,
+            assignment.role_name,
+            Jsonb({"role_definition_id": assignment.role_definition_id}),
+        ),
+    ).fetchone()
+    assert permission is not None
+    resource = conn.execute(
+        "INSERT INTO resources (tenant_id, provider, kind, identifier, environment) "
+        "VALUES (%s, 'azure', 'scope', %s, 'unknown') "
+        "ON CONFLICT (tenant_id, provider, identifier) DO UPDATE SET "
+        "kind = EXCLUDED.kind RETURNING id",
+        (tenant_id, assignment.scope),
+    ).fetchone()
+    assert resource is not None
+    conn.execute(
+        "INSERT INTO permission_reaches_resource (permission_id, resource_id, access) "
+        "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+        (str(permission[0]), str(resource[0]), assignment.access),
+    )
+
+
+def persist_workspace(
+    conn: psycopg.Connection, tenant_id: str, result: WorkspaceScanResult
+) -> None:
+    """Persist OAuth grants from a read-only Google Workspace scan."""
+    _reset_provider(conn, tenant_id, "workspace")
+    for grant in result.grants:
+        principal_id = _upsert_simple_principal(
+            conn, tenant_id, "workspace", "workspace_user", grant.user_email
+        )
+        agent_id = _upsert_simple_agent(
+            conn, tenant_id, f"workspace:{grant.display_text or grant.client_id}"
+        )
+        credential_id = _upsert_simple_credential(
+            conn, tenant_id, "workspace", "oauth_grant", grant.fingerprint,
+            principal_id, None, "active",
+        )
+        conn.execute(
+            "INSERT INTO agent_holds_credential (agent_id, credential_id, inferred_from) "
+            "VALUES (%s, %s, 'scan') ON CONFLICT DO NOTHING",
+            (agent_id, credential_id),
+        )
+        for scope in grant.scopes:
+            _persist_simple_permission(
+                conn, tenant_id, "workspace", principal_id, scope,
+                f"workspace:{grant.user_email}", "oauth_scope",
+                "write" if scope in grant.sensitive_scopes else "read",
+                {"client_id": grant.client_id, "native_app": grant.native_app},
+            )
+    conn.commit()
+
+
+def persist_slack(
+    conn: psycopg.Connection, tenant_id: str, result: SlackScanResult
+) -> None:
+    """Persist installed-app inventory from a read-only Slack Grid scan."""
+    _reset_provider(conn, tenant_id, "slack")
+    for app in result.apps:
+        principal_id = _upsert_simple_principal(
+            conn, tenant_id, "slack", "slack_app", app.app_id
+        )
+        agent_id = _upsert_simple_agent(conn, tenant_id, f"slack:{app.name or app.app_id}")
+        credential_id = _upsert_simple_credential(
+            conn, tenant_id, "slack", "app_installation", app.fingerprint,
+            principal_id, app.installed_at,
+            "inactive" if app.restricted else "active",
+        )
+        conn.execute(
+            "INSERT INTO agent_holds_credential (agent_id, credential_id, inferred_from) "
+            "VALUES (%s, %s, 'scan') ON CONFLICT DO NOTHING",
+            (agent_id, credential_id),
+        )
+        for scope in app.scopes:
+            _persist_simple_permission(
+                conn, tenant_id, "slack", principal_id, scope,
+                f"slack:{app.team_id or result.enterprise_id}", "workspace",
+                "read" if scope.endswith(":read") else "write",
+                {"app_id": app.app_id},
+            )
+    conn.commit()
+
+
+def _reset_provider(conn: psycopg.Connection, tenant_id: str, provider: str) -> None:
+    conn.execute(
+        "DELETE FROM permission_reaches_resource WHERE permission_id IN "
+        "(SELECT id FROM permissions WHERE tenant_id = %s AND provider = %s)",
+        (tenant_id, provider),
+    )
+    conn.execute(
+        "DELETE FROM permissions WHERE tenant_id = %s AND provider = %s",
+        (tenant_id, provider),
+    )
+
+
+def _upsert_simple_principal(
+    conn: psycopg.Connection, tenant_id: str, provider: str, kind: str, external_id: str
+) -> str:
+    row = conn.execute(
+        "INSERT INTO principals (tenant_id, provider, kind, external_id) "
+        "VALUES (%s, %s, %s, %s) "
+        "ON CONFLICT (tenant_id, provider, external_id) DO UPDATE SET "
+        "kind = EXCLUDED.kind RETURNING id",
+        (tenant_id, provider, kind, external_id),
+    ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def _upsert_simple_agent(conn: psycopg.Connection, tenant_id: str, name: str) -> str:
+    row = conn.execute(
+        "INSERT INTO agents (tenant_id, name, framework, environment, status, last_seen) "
+        "VALUES (%s, %s, '', 'unknown', 'active', now()) "
+        "ON CONFLICT (tenant_id, name) DO UPDATE SET last_seen = now(), status = 'active' "
+        "RETURNING id",
+        (tenant_id, name),
+    ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def _upsert_simple_credential(
+    conn: psycopg.Connection,
+    tenant_id: str,
+    provider: str,
+    kind: str,
+    fingerprint: str,
+    principal_id: str,
+    created_at: Any,
+    status: str,
+) -> str:
+    row = conn.execute(
+        "INSERT INTO credentials (tenant_id, provider, kind, fingerprint, owner_principal, "
+        "created_at_provider, status, last_scanned) VALUES (%s, %s, %s, %s, %s, %s, %s, now()) "
+        "ON CONFLICT (tenant_id, provider, fingerprint) DO UPDATE SET "
+        "created_at_provider = EXCLUDED.created_at_provider, status = EXCLUDED.status, "
+        "owner_principal = EXCLUDED.owner_principal, last_scanned = now() RETURNING id",
+        (tenant_id, provider, kind, fingerprint, principal_id, created_at, status),
+    ).fetchone()
+    assert row is not None
+    return str(row[0])
+
+
+def _persist_simple_permission(
+    conn: psycopg.Connection,
+    tenant_id: str,
+    provider: str,
+    principal_id: str,
+    scope: str,
+    resource: str,
+    resource_kind: str,
+    access: str,
+    raw: dict[str, Any],
+) -> None:
+    permission = conn.execute(
+        "INSERT INTO permissions (tenant_id, principal_id, provider, scope, raw) "
+        "VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (tenant_id, principal_id, provider, scope, Jsonb(raw)),
+    ).fetchone()
+    assert permission is not None
+    resource_row = conn.execute(
+        "INSERT INTO resources (tenant_id, provider, kind, identifier, environment) "
+        "VALUES (%s, %s, %s, %s, 'unknown') "
+        "ON CONFLICT (tenant_id, provider, identifier) DO UPDATE SET "
+        "kind = EXCLUDED.kind RETURNING id",
+        (tenant_id, provider, resource_kind, resource),
+    ).fetchone()
+    assert resource_row is not None
+    conn.execute(
+        "INSERT INTO permission_reaches_resource (permission_id, resource_id, access) "
+        "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
+        (str(permission[0]), str(resource_row[0]), access),
+    )

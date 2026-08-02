@@ -12,10 +12,19 @@ from typing import Any, cast
 
 import redis
 
+from abx_scanner.azure_client import AzureClient
 from abx_scanner.gcp_client import GcpClient
 from abx_scanner.gh_auth import installation_token, now_epoch
 from abx_scanner.gh_client import GitHubClient
-from abx_scanner.scan import run_gcp_scan, run_github_scan
+from abx_scanner.scan import (
+    run_azure_scan,
+    run_gcp_scan,
+    run_github_scan,
+    run_slack_scan,
+    run_workspace_scan,
+)
+from abx_scanner.slack_client import SlackClient
+from abx_scanner.workspace_client import WorkspaceClient
 
 STREAM = "abx:scan_jobs"
 GROUP = "abx-scanners"
@@ -40,6 +49,18 @@ def process_job(fields: dict[str, str]) -> None:
         return
     if provider == "gcp":
         run_gcp_scan(fields["tenant_id"], fields["project_id"], GcpClient())
+        return
+    if provider == "azure":
+        run_azure_scan(
+            fields["tenant_id"], fields["azure_tenant"], fields["subscription_id"],
+            AzureClient(),
+        )
+        return
+    if provider == "workspace":
+        run_workspace_scan(fields["tenant_id"], fields["domain"], WorkspaceClient())
+        return
+    if provider == "slack":
+        run_slack_scan(fields["tenant_id"], SlackClient(_env("ABX_SLACK_ADMIN_TOKEN")))
         return
     raise ValueError(f"unsupported scan provider: {provider}")
 

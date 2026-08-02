@@ -3,11 +3,46 @@
   "$id": "https://leaflyst.dev/schemas/event.schema.json",
   "title": "CanonicalEvent",
   "description": "Every captured agent action, from any source, normalized into this shape before ingest. event_hash covers all fields except itself, including payload_digest but never the payload body (erasure-compatible chain).",
-  "x-abx-hashed-fields": [
-    "event_id", "tenant_id", "agent_id", "session_id", "seq", "ts",
-    "source", "event_type", "operation", "credential_ref", "resource_refs",
-    "payload_digest", "payload_ref", "payload_truncated", "redactions", "prev_hash"
-  ],
+  "x-abx-hashed-fields-by-version": {
+    "1": [
+      "event_id",
+      "tenant_id",
+      "agent_id",
+      "session_id",
+      "seq",
+      "ts",
+      "source",
+      "event_type",
+      "operation",
+      "credential_ref",
+      "resource_refs",
+      "payload_digest",
+      "payload_ref",
+      "payload_truncated",
+      "redactions",
+      "prev_hash"
+    ],
+    "2": [
+      "agent_id",
+      "credential_ref",
+      "event_id",
+      "event_type",
+      "operation",
+      "operator_ref",
+      "payload_digest",
+      "payload_ref",
+      "payload_truncated",
+      "prev_hash",
+      "redactions",
+      "resource_refs",
+      "schema_version",
+      "seq",
+      "session_id",
+      "source",
+      "tenant_id",
+      "ts"
+    ]
+  },
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -61,7 +96,12 @@
     },
     "source": {
       "type": "string",
-      "enum": ["mcp_tap", "sdk_langgraph", "otel_ingest", "admin_api"],
+      "enum": [
+        "mcp_tap",
+        "sdk_langgraph",
+        "otel_ingest",
+        "admin_api"
+      ],
       "title": "Source"
     },
     "event_type": {
@@ -83,7 +123,10 @@
       "type": "object",
       "title": "Operation",
       "additionalProperties": false,
-      "required": ["name", "outcome"],
+      "required": [
+        "name",
+        "outcome"
+      ],
       "properties": {
         "name": {
           "type": "string",
@@ -91,31 +134,48 @@
           "description": "e.g. 'tools/call get-sum' or 'chat gpt-4o'"
         },
         "provider": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "maxLength": 256,
           "description": "Normalized provider or MCP server name",
           "default": null
         },
         "target": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "maxLength": 512,
           "description": "Tool name, model name, or resource URI",
           "default": null
         },
         "outcome": {
           "type": "string",
-          "enum": ["success", "error", "denied", "unknown"],
+          "enum": [
+            "success",
+            "error",
+            "denied",
+            "unknown"
+          ],
           "title": "Outcome"
         },
         "duration_ms": {
-          "type": ["integer", "null"],
+          "type": [
+            "integer",
+            "null"
+          ],
           "minimum": 0,
           "default": null
         }
       }
     },
     "credential_ref": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "maxLength": 256,
       "description": "Fingerprint reference into the identity graph; never a secret value",
       "default": null
@@ -135,7 +195,10 @@
       "description": "sha256 of the redacted, truncated payload body"
     },
     "payload_ref": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "maxLength": 512,
       "description": "Pointer into the payload store; null once the body is deleted",
       "default": null
@@ -161,6 +224,20 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
       "description": "sha256 over the canonical JSON of all fields except event_hash"
+    },
+    "schema_version": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "Canonical event schema version. Absent means version 1, the original field set. Hashed from version 2 onward so the field set an event is verified under cannot be switched by an attacker."
+    },
+    "operator_ref": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 256,
+      "default": null,
+      "description": "Graph reference to the natural person who launched this agent session (EU AI Act Article 12). A reference, never an inline identity, so personal-data erasure never touches the event chain."
     }
   }
 }

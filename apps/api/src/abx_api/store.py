@@ -23,6 +23,7 @@ EVENT_COLUMNS = [
     "op_name", "op_provider", "op_target", "op_outcome", "op_duration_ms",
     "credential_ref", "resource_refs", "payload_digest", "payload_ref",
     "payload_truncated", "redactions", "prev_hash", "event_hash", "chain_seq",
+    "schema_version", "operator_ref",
 ]
 
 
@@ -103,7 +104,7 @@ def get_payload(payload_ref: str) -> bytes | None:
     with pg_pool().connection() as conn:
         segment = conn.execute(
             "SELECT b.object_key, s.byte_offset, s.byte_length, s.wrapped_key, "
-            "s.key_nonce, s.data_nonce FROM payload_segments s "
+            "s.key_nonce, s.data_nonce, s.master_key_id FROM payload_segments s "
             "JOIN payload_batches b ON b.id = s.batch_id WHERE s.payload_ref = %s",
             (payload_ref,),
         ).fetchone()
@@ -111,7 +112,7 @@ def get_payload(payload_ref: str) -> bytes | None:
     if segment is None:
         return _get_legacy_payload(payload_ref)
 
-    object_key, offset, length, wrapped_key, key_nonce, data_nonce = segment
+    object_key, offset, length, wrapped_key, key_nonce, data_nonce, master_key_id = segment
     if length == 0:
         ciphertext = b""
     else:
@@ -124,7 +125,10 @@ def get_payload(payload_ref: str) -> bytes | None:
         except s3_client().exceptions.NoSuchKey:
             return None
         ciphertext = obj["Body"].read()
-    return open_sealed(ciphertext, bytes(wrapped_key), bytes(key_nonce), bytes(data_nonce))
+    return open_sealed(
+        ciphertext, bytes(wrapped_key), bytes(key_nonce), bytes(data_nonce),
+        str(master_key_id),
+    )
 
 
 def _get_legacy_payload(payload_ref: str) -> bytes | None:

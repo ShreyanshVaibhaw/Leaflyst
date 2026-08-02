@@ -13,13 +13,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from abx_api.auth import require_admin
 from abx_api.export_safety import csv_cell
+from abx_api.rbac import require_read
 from abx_api.store import ch_client, get_payload, pg_pool
 from abx_api.verify import VerifyResult, verify_tenant_chain
 
 router = APIRouter(prefix="/v1/replay")
-admin = [Depends(require_admin)]
+admin = [Depends(require_read)]
 
 
 class CredentialLink(BaseModel):

@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS abx.events
     redactions        Array(String),
     prev_hash         FixedString(64),
     event_hash        FixedString(64),
+    -- Canonical event schema version. 1 is the original field set and is what
+    -- rows written before versioning existed carry; the hashed field set is
+    -- selected from this, so it must round-trip exactly or verification fails.
+    schema_version    UInt16 DEFAULT 1,
+    -- Natural person of record (EU AI Act Article 12), resolved from the
+    -- ingest token rather than the event body. Empty means unattributed.
+    operator_ref      String DEFAULT '',
     -- Per-tenant chain position assigned at ingest; storage metadata, not part
     -- of the hashed event. Verification walks the chain in this order.
     chain_seq         UInt64,

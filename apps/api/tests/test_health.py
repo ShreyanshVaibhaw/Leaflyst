@@ -21,6 +21,9 @@ def test_readyz_checks_all_durable_dependencies() -> None:
             "clickhouse": "ok",
             "redis": "ok",
             "object_store": "ok",
+            # Every master key that stored payloads reference is configured;
+            # a missing one must block a rollout, not surface mid-incident.
+            "payload_keyring": "ok",
         },
     }
 

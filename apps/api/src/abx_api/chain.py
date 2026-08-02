@@ -23,9 +23,28 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from abx_schemas.generated.contract import HASHED_FIELDS
+from abx_schemas.generated.contract import HASHED_FIELDS_BY_VERSION
 
 GENESIS_HASH = hashlib.sha256(b"").hexdigest()
+
+
+def hashed_fields_for(event: dict[str, Any]) -> tuple[str, ...]:
+    """The field set this event is hashed under, chosen by its own version.
+
+    An event with no schema_version is version 1, the original field set. From
+    version 2 the version is itself hashed, so it cannot be stripped or forged
+    to change how an event is read: doing so changes the computed hash and
+    fails verification. This is what lets a chain span a schema change.
+
+    abx_verify.py implements the identical selection; the two must not drift.
+    """
+    version = event.get("schema_version", 1)
+    if not isinstance(version, int) or isinstance(version, bool):
+        raise ValueError("schema_version must be an integer")
+    fields = HASHED_FIELDS_BY_VERSION.get(version)
+    if fields is None:
+        raise ValueError(f"unknown canonical event schema version {version}")
+    return fields
 
 def format_ts(ts: datetime) -> str:
     """RFC3339, UTC, exactly millisecond precision, Z suffix."""
@@ -36,7 +55,7 @@ def format_ts(ts: datetime) -> str:
 
 def canonical_json(event: dict[str, Any]) -> bytes:
     """Canonical bytes of an event dict (event_hash excluded if present)."""
-    doc = {k: event[k] for k in HASHED_FIELDS}
+    doc = {k: event[k] for k in hashed_fields_for(event)}
     return json.dumps(doc, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
@@ -58,6 +77,7 @@ def event_to_row(event: dict[str, Any], chain_seq: int) -> list[Any]:
         event["payload_digest"], event.get("payload_ref") or "",
         event["payload_truncated"], event["redactions"],
         event["prev_hash"], event["event_hash"], chain_seq,
+        event.get("schema_version", 1), event.get("operator_ref") or "",
     ]
 
 
@@ -76,7 +96,17 @@ def row_to_event(row: dict[str, Any]) -> dict[str, Any]:
         ts = datetime.fromisoformat(str(ts))
     if ts.tzinfo is None:
         ts = ts.replace(tzinfo=UTC)
+    # Version-2 fields must be absent, not null, on a version-1 event: the
+    # hashed field set is selected by schema_version, so an extra key would
+    # change the canonical bytes and fail verification of history.
+    version = int(row.get("schema_version") or 1)
+    versioned: dict[str, Any] = (
+        {"schema_version": version, "operator_ref": row.get("operator_ref") or None}
+        if version >= 2
+        else {}
+    )
     return {
+        **versioned,
         "event_id": _s(row["event_id"]),
         "tenant_id": _s(row["tenant_id"]),
         "agent_id": row["agent_id"],

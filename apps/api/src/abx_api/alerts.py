@@ -14,11 +14,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
-from abx_api.auth import require_admin
+from abx_api.baselines import build_baseline, observation_of
+from abx_api.rbac import require_configure, require_read, require_triage
 from abx_api.settings import settings
-from abx_api.store import ch_client, pg_pool
+from abx_api.store import ch_client, get_payload, pg_pool
+from abx_api.tool_integrity import TOOL_DEF_PREFIX, record_and_diff
 
-router = APIRouter(prefix="/v1/alerts", dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/v1/alerts", dependencies=[Depends(require_read)])
 logger = logging.getLogger(__name__)
 
 
@@ -74,7 +76,11 @@ def alert_list(tenant_id: str, status: str = "open") -> list[AlertView]:
     ) for row in rows]
 
 
-@router.post("/{alert_id}/acknowledge", response_model=dict[str, str])
+@router.post(
+    "/{alert_id}/acknowledge",
+    response_model=dict[str, str],
+    dependencies=[Depends(require_triage)],
+)
 def acknowledge(tenant_id: str, alert_id: str) -> dict[str, str]:
     with pg_pool().connection() as conn:
         row = conn.execute(
@@ -103,7 +109,14 @@ def channels(tenant_id: str) -> list[ChannelConfig]:
     ) for row in rows]
 
 
-@router.put("/channels", response_model=ChannelConfig)
+# Alert delivery is configuration: a read-only principal that could rewrite
+# it could route this tenant's security alerts to an address it controls,
+# or disable delivery entirely and blind the tenant's detection.
+@router.put(
+    "/channels",
+    response_model=ChannelConfig,
+    dependencies=[Depends(require_configure)],
+)
 def update_channel(tenant_id: str, update: ChannelUpdate) -> ChannelConfig:
     if update.kind not in {"slack", "email"}:
         raise HTTPException(status_code=422, detail="unsupported alert channel")
@@ -126,7 +139,11 @@ def update_channel(tenant_id: str, update: ChannelUpdate) -> ChannelConfig:
     )
 
 
-@router.post("/evaluate", response_model=dict[str, int])
+@router.post(
+    "/evaluate",
+    response_model=dict[str, int],
+    dependencies=[Depends(require_configure)],
+)
 def evaluate_all(tenant_id: str) -> dict[str, int]:
     rows = _ch_rows(
         "SELECT event_id FROM events WHERE tenant_id = %(tenant)s ORDER BY chain_seq DESC "
@@ -233,6 +250,29 @@ def _facts(tenant_id: str, event: dict[str, Any]) -> EventFacts:
                         for ref in previous[0]["resource_refs"]
                         if str(ref).startswith("abx:tool-inventory:")), None)
             inventory_drift = old is not None and old != inventory
+    changed_tools: tuple[tuple[str, float, int], ...] = ()
+    poisoned_tools: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    if any(ref.startswith(TOOL_DEF_PREFIX) for ref in refs):
+        with pg_pool().connection() as conn:
+            changed_tools, poisoned_tools = record_and_diff(
+                conn,
+                tenant_id,
+                str(event.get("op_provider") or "unknown"),
+                event["session_id"],
+                list(refs),
+                _payload_body(event),
+            )
+    # Rule 8 needs the agent's own history. Degrades to no baseline rather
+    # than failing the whole evaluation: an unavailable baseline must not stop
+    # the deterministic rules from firing.
+    baseline = None
+    observation = None
+    try:
+        baseline = build_baseline(tenant_id, event["agent_id"], event["session_id"])
+        observation = observation_of(event)
+    except Exception:  # noqa: BLE001
+        logger.exception("behavioural baseline unavailable for tenant %s", tenant_id)
+
     return EventFacts(
         event_id=str(event["event_id"]), session_id=event["session_id"],
         agent_id=event["agent_id"], operation=event["op_name"],
@@ -243,7 +283,28 @@ def _facts(tenant_id: str, event: dict[str, Any]) -> EventFacts:
         trailing_session_median=statistics.median(prior) if prior else None,
         environment_crossover=bool(agent and agent[0] != "prod" and prod_refs),
         tool_inventory_drift=inventory_drift,
+        changed_tools=changed_tools,
+        poisoned_tools=poisoned_tools,
+        baseline=baseline,
+        observation=observation,
     )
+
+
+def _payload_body(event: dict[str, Any]) -> str | None:
+    """The captured tools/list body, or None when capture is off.
+
+    A missing payload means the description text is unknown, which the caller
+    must treat as unknown rather than clean: detection of WHICH tool changed
+    still works from resource_refs, but poisoning analysis cannot run.
+    """
+    ref = str(event.get("payload_ref") or "")
+    if not ref:
+        return None
+    try:
+        body = get_payload(ref)
+    except Exception:  # noqa: BLE001 - analysis degrades, alerting continues
+        return None
+    return body.decode("utf-8", errors="replace") if body else None
 
 
 def _upsert_and_maybe_dispatch(tenant_id: str, event: dict[str, Any], candidate: Any) -> bool:

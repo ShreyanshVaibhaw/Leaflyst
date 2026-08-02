@@ -5,10 +5,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from abx_api.auth import new_ingest_token, new_scan_token, require_admin
+from abx_api.auth import new_ingest_token, new_scan_token
+from abx_api.rbac import require_configure
 from abx_api.store import pg_pool
 
-router = APIRouter(prefix="/v1/onboarding", dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/v1/onboarding", dependencies=[Depends(require_configure)])
 
 
 class BootstrapRequest(BaseModel):

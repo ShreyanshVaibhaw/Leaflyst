@@ -183,6 +183,20 @@ class CanonicalEvent(BaseModel):
             pattern='^[0-9a-f]{64}$',
         ),
     ]
+    schema_version: Annotated[
+        int | None,
+        Field(
+            description='Canonical event schema version. Absent means version 1, the original field set. Hashed from version 2 onward so the field set an event is verified under cannot be switched by an attacker.',
+            ge=2,
+        ),
+    ] = None
+    operator_ref: Annotated[
+        str | None,
+        Field(
+            description='Graph reference to the natural person who launched this agent session (EU AI Act Article 12). A reference, never an inline identity, so personal-data erasure never touches the event chain.',
+            max_length=256,
+        ),
+    ] = None
 
 
 class EvidenceEvent(BaseModel):
