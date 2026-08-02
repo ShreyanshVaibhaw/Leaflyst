@@ -1,6 +1,12 @@
 import { PageHeader, Panel } from "@/components/ui";
 import { OnboardingForm } from "./onboarding-form";
 
+// Rendered per request so the Content Security Policy nonce set in proxy.ts
+// can be stamped into this page's inline scripts. A cached HTML body carries
+// whatever nonce existed when it was built, which never matches the nonce sent
+// with the response, so the browser blocks hydration on a page that looks fine.
+export const dynamic = "force-dynamic";
+
 export default function OnboardingPage() {
   return <>
     <PageHeader eyebrow="Start recording" title="Create your security workspace" description="One workspace connects the read-only credential graph to your agent recordings. No backend setup is required." />
