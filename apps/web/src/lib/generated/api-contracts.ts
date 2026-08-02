@@ -2256,7 +2256,7 @@ export interface operations {
     control_report_v1_compliance_controls_get: {
         parameters: {
             query?: {
-                tenant_id?: string;
+                tenant_id?: string | null;
             };
             header?: {
                 "x-abx-admin-key"?: string;
@@ -2641,7 +2641,7 @@ export interface operations {
     run_public_demo_v1_demo_public_run_post: {
         parameters: {
             query?: {
-                tenant_id?: string;
+                tenant_id?: string | null;
             };
             header?: {
                 "x-abx-admin-key"?: string;
@@ -2923,7 +2923,7 @@ export interface operations {
     bootstrap_v1_onboarding_bootstrap_post: {
         parameters: {
             query?: {
-                tenant_id?: string;
+                tenant_id?: string | null;
             };
             header?: {
                 "x-abx-admin-key"?: string;

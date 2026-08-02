@@ -20,11 +20,20 @@ from abx_api.rate_limit import RateLimit
 from abx_api.replay import router as replay_router
 from abx_api.reports import router as reports_router
 from abx_api.revocation import router as revocation_router
+from abx_api.security_headers import SecurityHeaders, interactive_docs_enabled
 from abx_api.settings import production_config_errors, settings
 from abx_api.tenant_settings import router as tenant_settings_router
 from abx_api.verify import router as verify_router
 
-app = FastAPI(title="Leaflyst API", version="0.1.0")
+_docs_enabled = interactive_docs_enabled(settings.environment)
+
+app = FastAPI(
+    title="Leaflyst API",
+    version="0.1.0",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 configuration_errors = production_config_errors(settings)
 if configuration_errors:
     raise RuntimeError("unsafe production configuration: " + "; ".join(configuration_errors))
@@ -47,6 +56,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Added last so it wraps everything else: a 429 from the limiter and a rejection
+# from the host check are responses too, and they need the same headers as a
+# successful one.
+app.add_middleware(SecurityHeaders)
 app.include_router(ingest_router)
 app.include_router(verify_router)
 app.include_router(dashboard_router)

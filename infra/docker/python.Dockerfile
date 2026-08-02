@@ -47,4 +47,7 @@ EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
 
-CMD ["uvicorn", "abx_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+# --no-server-header: uvicorn writes its banner in the protocol layer, below the
+# point any ASGI middleware can reach, so this is the only place to remove it.
+CMD ["uvicorn", "abx_api.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--no-access-log", "--no-server-header"]
