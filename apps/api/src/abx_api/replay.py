@@ -14,6 +14,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from abx_api.export_safety import csv_cell
+from abx_api.identifiers import ResourceId
 from abx_api.rbac import require_read, require_triage
 from abx_api.store import ch_client, get_payload, pg_pool
 from abx_api.verify import VerifyResult, verify_tenant_chain
@@ -184,7 +185,7 @@ def agents(tenant_id: str) -> list[AgentSummary]:
     response_model=list[SessionSummary],
     dependencies=read_only,
 )
-def agent_sessions(tenant_id: str, agent_id: str) -> list[SessionSummary]:
+def agent_sessions(tenant_id: str, agent_id: ResourceId) -> list[SessionSummary]:
     rows = _query(
         "SELECT session_id, any(agent_id) AS agent_id, min(ts) AS started_at, "
         "max(ts) AS ended_at, count() AS event_count, countIf(op_outcome = 'error') AS errors "
@@ -294,7 +295,7 @@ def session_detail(tenant_id: str, session_id: str) -> SessionDetail:
     response_model=list[TimelineEvent],
     dependencies=read_only,
 )
-def credential_events(tenant_id: str, credential_id: str) -> list[TimelineEvent]:
+def credential_events(tenant_id: str, credential_id: ResourceId) -> list[TimelineEvent]:
     with pg_pool().connection() as conn:
         row = conn.execute(
             "SELECT fingerprint FROM credentials WHERE tenant_id = %s AND id = %s",

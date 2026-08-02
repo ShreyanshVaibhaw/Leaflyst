@@ -39,6 +39,7 @@ from enum import StrEnum
 
 from fastapi import Header, HTTPException
 
+from abx_api.identifiers import is_uuid
 from abx_api.settings import settings
 from abx_api.store import pg_pool
 
@@ -122,10 +123,15 @@ def require(capability: Capability) -> Callable[..., Principal]:
     """
 
     def dependency(
-        tenant_id: str = "",
+        tenant_id: str | None = None,
         x_abx_admin_key: str = Header(default=""),
         authorization: str = Header(default=""),
     ) -> Principal:
+        # None means the route does not take a tenant. An empty or malformed
+        # string means the caller sent one and got it wrong, which is a 400 and
+        # not a 500 reached by way of a failed UUID cast in the database.
+        if tenant_id is not None and not is_uuid(tenant_id):
+            raise HTTPException(status_code=400, detail="tenant_id must be a UUID")
         principal = resolve_principal(x_abx_admin_key, authorization)
         if not principal.may(capability):
             raise HTTPException(

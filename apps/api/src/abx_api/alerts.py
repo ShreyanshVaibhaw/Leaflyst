@@ -15,6 +15,7 @@ from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
 from abx_api.baselines import build_baseline, observation_of
+from abx_api.identifiers import ResourceId
 from abx_api.rbac import require_configure, require_read, require_triage
 from abx_api.settings import settings
 from abx_api.store import ch_client, get_payload, pg_pool
@@ -81,7 +82,7 @@ def alert_list(tenant_id: str, status: str = "open") -> list[AlertView]:
     response_model=dict[str, str],
     dependencies=[Depends(require_triage)],
 )
-def acknowledge(tenant_id: str, alert_id: str) -> dict[str, str]:
+def acknowledge(tenant_id: str, alert_id: ResourceId) -> dict[str, str]:
     with pg_pool().connection() as conn:
         row = conn.execute(
             "UPDATE alerts SET status = 'acknowledged' WHERE tenant_id = %s AND id = %s "
