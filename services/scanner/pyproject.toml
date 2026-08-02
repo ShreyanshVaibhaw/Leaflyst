@@ -9,6 +9,8 @@ dependencies = [
     "redis>=5.2",
     "boto3>=1.35",
     "google-auth[requests]>=2.40",
+    # Entra/ARM token acquisition. The scanner issues GET only; see azure_client.
+    "azure-identity>=1.19",
     # GitHub App JWT auth (RS256). GitHub REST calls themselves use stdlib urllib.
     "pyjwt[crypto]>=2.10",
 ]

@@ -74,6 +74,23 @@ _FINGERPRINT = re.compile(
     r"pat:[0-9]+|deploykey:[^\s]{1,220}|appinstall:[0-9]+)$"
 )
 
+# OpenAI Agents SDK. The official instrumentation emits gen_ai.* spans, so most
+# of it normalizes already; what is distinct is the handoff between agents,
+# which is a delegation edge rather than another tool call.
+OPENAI_AGENT_NAME = "openai.agent.name"
+OPENAI_HANDOFF_FROM = "openai.agent.handoff.from"
+OPENAI_HANDOFF_TO = "openai.agent.handoff.to"
+
+# A2A (Agent2Agent), Linux Foundation, v1.0.1.
+A2A_TASK_ID = "a2a.task.id"
+A2A_CONTEXT_ID = "a2a.context.id"
+A2A_AGENT_NAME = "a2a.agent.name"
+A2A_PEER_NAME = "a2a.peer.agent.name"
+A2A_PEER_URL = "a2a.peer.agent.url"
+A2A_CARD_DIGEST = "a2a.agent.card.digest"
+A2A_ASSERTED_IDENTITY = "a2a.peer.asserted.identity"
+A2A_AUTH_SCHEME = "a2a.peer.auth.scheme"
+
 
 @dataclass(frozen=True)
 class NormalizedSpan:
@@ -100,7 +117,11 @@ async def otlp_traces(
     events = normalize_export(export_request)
     if events:
         events = allocate_session_sequences(identity.tenant_id, events)
-        ingest_events(identity.tenant_id, events, ingest_token_id=identity.token_id)
+        ingest_events(
+            identity.tenant_id, events,
+            ingest_token_id=identity.token_id,
+            operator_ref=identity.operator_ref,
+        )
         try:
             link_observed_credentials(identity.tenant_id, events)
         except Exception:
@@ -163,6 +184,8 @@ def _to_ingest_event(item: NormalizedSpan) -> IngestEvent:
     agent_id = _clean(
         attrs.get(GEN_AI_AGENT_ID)
         or attrs.get(GEN_AI_AGENT_NAME)
+        or attrs.get(OPENAI_AGENT_NAME)
+        or attrs.get(A2A_AGENT_NAME)
         or attrs.get("entity.name")
         or item.resource.get("service.name")
         or item.scope_name
@@ -182,7 +205,13 @@ def _to_ingest_event(item: NormalizedSpan) -> IngestEvent:
         {
             "event_id": str(uuid.uuid4()),
             "agent_id": agent_id[:256],
-            "session_id": _clean(attrs.get(GEN_AI_CONVERSATION_ID) or trace_id)[:256],
+            # An A2A context spans multiple agents, so it is the session that
+            # makes a delegation chain readable end to end.
+            "session_id": _clean(
+                attrs.get(A2A_CONTEXT_ID)
+                or attrs.get(GEN_AI_CONVERSATION_ID)
+                or trace_id
+            )[:256],
             "seq": 0,
             "ts": timestamp,
             "source": (
@@ -241,6 +270,10 @@ def _operation(attrs: dict[str, Any], span_name: str) -> str:
     explicit = attrs.get(GEN_AI_OPERATION)
     if explicit:
         return str(explicit)
+    # A handoff and an A2A task are delegation, not tool execution: calling
+    # them execute_tool would collapse the multi-agent edge replay depends on.
+    if attrs.get(OPENAI_HANDOFF_TO) or attrs.get(A2A_TASK_ID):
+        return "invoke_agent"
     inference = str(attrs.get("openinference.span.kind", "")).lower()
     traceloop = str(attrs.get("traceloop.span.kind", "")).lower()
     request_type = str(attrs.get("llm.request.type", "")).lower()
@@ -281,7 +314,49 @@ def _credential_ref(attrs: dict[str, Any]) -> str | None:
 def _resource_refs(attrs: dict[str, Any]) -> list[str]:
     raw = attrs.get("abx.resource.refs") or attrs.get("resource.refs") or []
     values = raw if isinstance(raw, list) else [raw]
-    return [_clean(value)[:1024] for value in values if value][:1024]
+    refs = [_clean(value)[:1024] for value in values if value]
+    refs.extend(_delegation_refs(attrs))
+    return refs[:1024]
+
+
+def _delegation_refs(attrs: dict[str, Any]) -> list[str]:
+    """Multi-agent delegation edges (OWASP ASI03, ASI07).
+
+    Recording who handed work to whom, and what identity was asserted at the
+    hop, is the part of multi-agent traffic nobody else captures. A2A is the
+    live case: it advertises auth schemes through Agent Cards but does not
+    mandate how those cards are verified, which leaves agent impersonation and
+    card tampering open. So every peer identity here is recorded as a CLAIM -
+    `a2a-peer-claimed` - exactly as MCP serverInfo is. Naming it as verified
+    would launder an unverified assertion into evidence.
+    """
+    refs: list[str] = []
+
+    task = _clean(attrs.get(A2A_TASK_ID) or attrs.get(A2A_CONTEXT_ID))
+    if task:
+        refs.append(f"abx:a2a-task:{task[:200]}")
+    peer = _clean(attrs.get(A2A_PEER_NAME) or attrs.get(A2A_PEER_URL))
+    if peer:
+        refs.append(f"abx:a2a-peer-claimed:{peer[:200]}")
+    identity = _clean(attrs.get(A2A_ASSERTED_IDENTITY))
+    if identity:
+        refs.append(f"abx:a2a-identity-claimed:{identity[:200]}")
+    scheme = _clean(attrs.get(A2A_AUTH_SCHEME))
+    if scheme:
+        refs.append(f"abx:a2a-auth-scheme:{scheme[:100]}")
+    card = _clean(attrs.get(A2A_CARD_DIGEST))
+    if card:
+        refs.append(f"abx:a2a-card:{card[:128]}")
+
+    # An OpenAI Agents SDK handoff is the same shape of edge under a different
+    # vocabulary, so it produces the same delegation refs.
+    source = _clean(attrs.get(OPENAI_HANDOFF_FROM))
+    target = _clean(attrs.get(OPENAI_HANDOFF_TO))
+    if target:
+        refs.append(f"abx:handoff-to:{target[:200]}")
+    if source:
+        refs.append(f"abx:handoff-from:{source[:200]}")
+    return refs
 
 
 def _attributes(values: Any) -> dict[str, Any]:

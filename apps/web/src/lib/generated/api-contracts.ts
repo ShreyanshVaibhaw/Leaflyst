@@ -130,6 +130,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/compliance/controls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Control Report
+         * @description SOC 2 / ISO 42001 control evidence collected from live behaviour.
+         *
+         *     Exercises the controls rather than reporting configuration: a check that
+         *     reads settings back proves nothing an attacker could not also have changed.
+         *     Not tenant-scoped - these are platform controls, so no tenant_id is taken
+         *     and none is leaked.
+         */
+        get: operations["control_report_v1_compliance_controls_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compliance/pack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compliance Pack
+         * @description Manifest for an Article 12 evidence pack covering a date range.
+         */
+        get: operations["compliance_pack_v1_compliance_pack_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/dashboard/credentials": {
         parameters: {
             query?: never;
@@ -456,6 +501,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Policies */
+        get: operations["list_policies_v1_policy_get"];
+        /**
+         * Upsert Policy
+         * @description Write a NEW VERSION rather than overwriting.
+         *
+         *     A customer must be able to prove which policy was in force at any past
+         *     moment, so history is retained the same way the event log retains events.
+         */
+        put: operations["upsert_policy_v1_policy_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/policy/decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide Action
+         * @description Evaluate one action. Never raises: a failure here is a decision, not a 500.
+         */
+        post: operations["decide_action_v1_policy_decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/replay/agents": {
         parameters: {
             query?: never;
@@ -695,6 +784,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/settings/read-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Read Token
+         * @description Mint a tenant-BOUND read token with an explicit role.
+         *
+         *     Replaces reaching for the shared operator key. The token carries its tenant,
+         *     so it cannot be pointed at another one, and its role, so an auditor handed
+         *     one cannot change anything.
+         */
+        post: operations["create_read_token_v1_settings_read_tokens_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/settings/read-tokens/{token_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke Read Token */
+        post: operations["revoke_read_token_v1_settings_read_tokens__token_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/settings/tokens": {
         parameters: {
             query?: never;
@@ -868,6 +998,53 @@ export interface components {
              */
             target: string;
         };
+        /** CompliancePack */
+        CompliancePack: {
+            /** Anchor */
+            anchor: {
+                [key: string]: unknown;
+            };
+            /** Article 12 Mapping */
+            article_12_mapping: {
+                [key: string]: string;
+            }[];
+            /** Chain */
+            chain: {
+                [key: string]: unknown;
+            };
+            /** Draft Standards */
+            draft_standards: {
+                [key: string]: string;
+            }[];
+            /** Format */
+            format: string;
+            /** Generated At */
+            generated_at: string;
+            /** Manifest Digest */
+            manifest_digest: string;
+            /** Operator Roster */
+            operator_roster: components["schemas"]["OperatorEntry"][];
+            /** Period */
+            period: {
+                [key: string]: string;
+            };
+            /** Redaction Policy */
+            redaction_policy: {
+                [key: string]: unknown;
+            };
+            /** Retention Policy */
+            retention_policy: {
+                [key: string]: unknown;
+            };
+            /** Scope Note */
+            scope_note: string;
+            /** Tenant Id */
+            tenant_id: string;
+            /** Verification */
+            verification: {
+                [key: string]: unknown;
+            };
+        };
         /** CredentialDetail */
         CredentialDetail: {
             /** Created At */
@@ -923,6 +1100,45 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** DecisionRequest */
+        DecisionRequest: {
+            /**
+             * Agent Id
+             * @default
+             */
+            agent_id: string;
+            /** Credential Ref */
+            credential_ref?: string | null;
+            /**
+             * Operation
+             * @default
+             */
+            operation: string;
+            /** Resource Refs */
+            resource_refs?: string[];
+            /**
+             * Tool Name
+             * @default
+             */
+            tool_name: string;
+        };
+        /** DecisionView */
+        DecisionView: {
+            /** Allowed */
+            allowed: boolean;
+            /** Degraded */
+            degraded: boolean;
+            /** Effect */
+            effect: string;
+            /** Enforcement Enabled */
+            enforcement_enabled: boolean;
+            /** Policy Id */
+            policy_id: string | null;
+            /** Policy Version */
+            policy_version: number | null;
+            /** Reason */
+            reason: string;
+        };
         /** DemoResult */
         DemoResult: {
             /** Agent Id */
@@ -947,6 +1163,11 @@ export interface components {
             /** Tenant Id */
             tenant_id: string;
         };
+        /**
+         * Effect
+         * @enum {string}
+         */
+        Effect: "allow" | "deny";
         /**
          * EventType
          * @enum {string}
@@ -1168,6 +1389,11 @@ export interface components {
             limit_state: "unlimited" | "within_limit" | "degraded";
             /** Over Limit Payload Events */
             over_limit_payload_events: number;
+            /**
+             * Payloads Dropped By Backpressure
+             * @default 0
+             */
+            payloads_dropped_by_backpressure: number;
             /** Payloads Omitted By Limit */
             payloads_omitted_by_limit: number;
         };
@@ -1274,6 +1500,12 @@ export interface components {
             /** User Ref */
             user_ref: string;
         };
+        /**
+         * OnError
+         * @description What a policy does when evaluation itself fails.
+         * @enum {string}
+         */
+        OnError: "allow" | "deny";
         /** Operation */
         Operation: {
             /** Duration Ms */
@@ -1286,6 +1518,19 @@ export interface components {
             provider?: string | null;
             /** Target */
             target?: string | null;
+        };
+        /** OperatorEntry */
+        OperatorEntry: {
+            /** Events */
+            events: number;
+            /** Operator Ref */
+            operator_ref: string | null;
+            /** Sessions */
+            sessions: number;
+            /** Unattributed Reason */
+            unattributed_reason?: string | null;
+            /** User Ref */
+            user_ref: string | null;
         };
         /**
          * Outcome
@@ -1320,6 +1565,61 @@ export interface components {
             /** Scope */
             scope: string;
         };
+        /** PolicyUpsert */
+        PolicyUpsert: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            effect: components["schemas"]["Effect"];
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Match Agents */
+            match_agents?: string[];
+            /**
+             * Match Destructive
+             * @default false
+             */
+            match_destructive: boolean;
+            /** Match Operations */
+            match_operations?: string[];
+            /** Match Resource Prefixes */
+            match_resource_prefixes?: string[];
+            /** Match Tools */
+            match_tools?: string[];
+            /** @default allow */
+            on_error: components["schemas"]["OnError"];
+            /** Policy Id */
+            policy_id: string;
+            /**
+             * Priority
+             * @default 100
+             */
+            priority: number;
+        };
+        /** PolicyView */
+        PolicyView: {
+            /** Created At */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Effect */
+            effect: string;
+            /** Enabled */
+            enabled: boolean;
+            /** On Error */
+            on_error: string;
+            /** Policy Id */
+            policy_id: string;
+            /** Priority */
+            priority: number;
+            /** Version */
+            version: number;
+        };
         /** PublicDemoRequest */
         PublicDemoRequest: {
             /** Visitor Ref */
@@ -1352,6 +1652,16 @@ export interface components {
             share_path: string;
             /** Tenant Id */
             tenant_id: string;
+        };
+        /** ReadTokenCreate */
+        ReadTokenCreate: {
+            /** Label */
+            label: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "viewer" | "responder" | "admin" | "auditor";
         };
         /** ReportAlert */
         ReportAlert: {
@@ -1484,6 +1794,8 @@ export interface components {
         SettingsView: {
             /** Capture Payloads */
             capture_payloads: boolean;
+            /** Compliance Mode */
+            compliance_mode: boolean;
             /** Created At */
             created_at: string;
             /** Members */
@@ -1494,6 +1806,8 @@ export interface components {
             redaction_rules: string[];
             /** Retention Days */
             retention_days: number;
+            /** Retention Floor Days */
+            retention_floor_days: number;
             /** Tenant Id */
             tenant_id: string;
             /** Tenant Name */
@@ -1575,6 +1889,8 @@ export interface components {
             kind: "recording" | "local_scan";
             /** Label */
             label: string;
+            /** Operator User Ref */
+            operator_user_ref?: string | null;
         };
         /** TokenCreated */
         TokenCreated: {
@@ -1718,6 +2034,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -1751,6 +2068,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -1784,6 +2102,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -1821,6 +2140,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -1856,6 +2176,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 alert_id: string;
@@ -1895,6 +2216,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -1921,6 +2243,78 @@ export interface operations {
             };
         };
     };
+    control_report_v1_compliance_controls_get: {
+        parameters: {
+            query?: {
+                tenant_id?: string;
+            };
+            header?: {
+                "x-abx-admin-key"?: string;
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compliance_pack_v1_compliance_pack_get: {
+        parameters: {
+            query: {
+                tenant_id: string;
+                period_from: string;
+                period_to: string;
+            };
+            header?: {
+                "x-abx-admin-key"?: string;
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompliancePack"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     credentials_list_v1_dashboard_credentials_get: {
         parameters: {
             query: {
@@ -1928,6 +2322,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -1961,6 +2356,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 credential_id: string;
@@ -1999,6 +2395,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2032,6 +2429,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2065,6 +2463,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2098,6 +2497,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2131,6 +2531,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 finding_id: string;
@@ -2166,6 +2567,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2199,6 +2601,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2227,9 +2630,12 @@ export interface operations {
     };
     run_public_demo_v1_demo_public_run_post: {
         parameters: {
-            query?: never;
+            query?: {
+                tenant_id?: string;
+            };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2267,6 +2673,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2300,6 +2707,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2368,6 +2776,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2405,6 +2814,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2438,6 +2848,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2472,6 +2883,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2500,9 +2912,12 @@ export interface operations {
     };
     bootstrap_v1_onboarding_bootstrap_post: {
         parameters: {
-            query?: never;
+            query?: {
+                tenant_id?: string;
+            };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2564,6 +2979,116 @@ export interface operations {
             };
         };
     };
+    list_policies_v1_policy_get: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: {
+                "x-abx-admin-key"?: string;
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_policy_v1_policy_put: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: {
+                "x-abx-admin-key"?: string;
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_action_v1_policy_decide_post: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: {
+                "x-abx-admin-key"?: string;
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DecisionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     agents_v1_replay_agents_get: {
         parameters: {
             query: {
@@ -2571,6 +3096,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -2604,6 +3130,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 agent_id: string;
@@ -2639,6 +3166,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 credential_id: string;
@@ -2674,6 +3202,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 session_id: string;
@@ -2709,6 +3238,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 session_id: string;
@@ -2744,6 +3274,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 session_id: string;
@@ -2779,6 +3310,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 session_id: string;
@@ -2849,6 +3381,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 session_id: string;
@@ -2884,6 +3417,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 session_id: string;
@@ -2919,6 +3453,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 credential_id: string;
@@ -2958,6 +3493,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 credential_id: string;
@@ -3030,6 +3566,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -3063,6 +3600,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -3093,6 +3631,82 @@ export interface operations {
             };
         };
     };
+    create_read_token_v1_settings_read_tokens_post: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: {
+                "x-abx-admin-key"?: string;
+                authorization?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_read_token_v1_settings_read_tokens__token_id__revoke_post: {
+        parameters: {
+            query: {
+                tenant_id: string;
+            };
+            header?: {
+                "x-abx-admin-key"?: string;
+                authorization?: string;
+            };
+            path: {
+                token_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_token_v1_settings_tokens_post: {
         parameters: {
             query: {
@@ -3100,6 +3714,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path?: never;
             cookie?: never;
@@ -3137,6 +3752,7 @@ export interface operations {
             };
             header?: {
                 "x-abx-admin-key"?: string;
+                authorization?: string;
             };
             path: {
                 kind: "recording" | "local_scan";

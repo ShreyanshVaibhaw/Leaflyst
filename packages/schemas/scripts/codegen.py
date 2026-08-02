@@ -28,24 +28,52 @@ CONTRACT_BEGIN = "# BEGIN GENERATED HASHED FIELDS"
 CONTRACT_END = "# END GENERATED HASHED FIELDS"
 
 
-def hashed_fields() -> list[str]:
+def hashed_fields() -> dict[int, list[str]]:
+    """The hashed field set per canonical event schema version.
+
+    Adding a field to the hashed set would silently break verification of every
+    event written before it, including anchored ones and exported evidence. So
+    the set is versioned and selected by the event's own schema_version.
+    """
     document = json.loads((SCHEMA_DIR / "event.schema.json").read_text(encoding="utf-8"))
-    fields = document.get("x-abx-hashed-fields")
-    if not isinstance(fields, list) or not all(isinstance(field, str) for field in fields):
-        raise RuntimeError("event schema must define x-abx-hashed-fields")
-    return fields
+    versions = document.get("x-abx-hashed-fields-by-version")
+    if not isinstance(versions, dict) or not versions:
+        raise RuntimeError("event schema must define x-abx-hashed-fields-by-version")
+    parsed: dict[int, list[str]] = {}
+    for version, fields in versions.items():
+        if not isinstance(fields, list) or not all(isinstance(field, str) for field in fields):
+            raise RuntimeError(f"hashed fields for version {version} must be a list of strings")
+        parsed[int(version)] = fields
+    if 1 not in parsed:
+        raise RuntimeError("version 1 field set is historic and must never be removed")
+    return parsed
 
 
-def contract_source(fields: list[str]) -> str:
-    lines = "\n".join(f'    "{field}",' for field in fields)
-    return HEADER + f"HASHED_FIELDS: tuple[str, ...] = (\n{lines}\n)\n"
+def _version_block(versions: dict[int, list[str]], indent: str, open_: str, close: str) -> str:
+    out = []
+    for version in sorted(versions):
+        fields = "\n".join(f'{indent}    "{field}",' for field in versions[version])
+        out.append(f"{indent}{version}: {open_}\n{fields}\n{indent}{close},")
+    return "\n".join(out)
 
 
-def verifier_source(source: str, fields: list[str]) -> str:
+def contract_source(versions: dict[int, list[str]]) -> str:
+    body = _version_block(versions, "    ", "(", ")")
+    return (
+        HEADER
+        + f"HASHED_FIELDS_BY_VERSION: dict[int, tuple[str, ...]] = {{\n{body}\n}}\n"
+        + f"CURRENT_SCHEMA_VERSION: int = {max(versions)}\n"
+    )
+
+
+def verifier_source(source: str, versions: dict[int, list[str]]) -> str:
     start = source.index(CONTRACT_BEGIN)
     end = source.index(CONTRACT_END, start) + len(CONTRACT_END)
-    lines = "\n".join(f'    "{field}",' for field in fields)
-    block = f"{CONTRACT_BEGIN}\nHASHED_FIELDS = [\n{lines}\n]\n{CONTRACT_END}"
+    body = _version_block(versions, "    ", "[", "]")
+    block = (
+        f"{CONTRACT_BEGIN}\nHASHED_FIELDS_BY_VERSION = {{\n{body}\n}}\n"
+        f"CURRENT_SCHEMA_VERSION = {max(versions)}\n{CONTRACT_END}"
+    )
     return source[:start] + block + source[end:]
 
 

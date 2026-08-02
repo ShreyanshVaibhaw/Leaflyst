@@ -71,6 +71,20 @@ def test_initialize_captures_protocol_version() -> None:
     assert ob.protocol_version == "2025-11-25"
 
 
+def test_initialize_result_records_server_identity() -> None:
+    """Legacy servers identify in the initialize result rather than in result
+    `_meta`. Both eras must reach identity parity, and both are self-reported."""
+    ob = make_observer()
+    ob.observe(c2s({"jsonrpc": "2.0", "id": 0, "method": "initialize",
+                    "params": {"protocolVersion": "2025-11-25", "capabilities": {}}}))
+    events = ob.observe(s2c({"jsonrpc": "2.0", "id": 0, "result": {
+        "protocolVersion": "2025-11-25",
+        "serverInfo": {"name": "fake", "version": "1.0"},
+    }}))
+    assert ob.server_info_claim == "fake@1.0"
+    assert "abx:mcp-server-claimed:fake@1.0" in events[0]["resource_refs"]
+
+
 def test_tools_hash_drift_detection() -> None:
     ob = make_observer()
     tools_v1 = [{"name": "echo", "description": "echoes", "inputSchema": {}}]

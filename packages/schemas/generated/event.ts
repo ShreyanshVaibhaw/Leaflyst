@@ -69,6 +69,14 @@ export interface CanonicalEvent {
    * sha256 over the canonical JSON of all fields except event_hash
    */
   event_hash: string;
+  /**
+   * Canonical event schema version. Absent means version 1, the original field set. Hashed from version 2 onward so the field set an event is verified under cannot be switched by an attacker.
+   */
+  schema_version?: number;
+  /**
+   * Graph reference to the natural person who launched this agent session (EU AI Act Article 12). A reference, never an inline identity, so personal-data erasure never touches the event chain.
+   */
+  operator_ref?: string | null;
 }
 export interface Operation {
   /**

@@ -15,11 +15,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from abx_api.auth import require_admin
 from abx_api.export_safety import csv_cell
+from abx_api.rbac import require_read
 from abx_api.store import pg_pool
 
-router = APIRouter(prefix="/v1/dashboard", dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/v1/dashboard", dependencies=[Depends(require_read)])
 
 SEVERITY_ORDER = ["critical", "high", "medium", "low", "info"]
 

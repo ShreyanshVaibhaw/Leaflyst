@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 import psycopg
 import pytest
+from abx_api import payload_crypto
 from abx_api.chain import format_ts
 from abx_api.ingest import ingest_events
 from abx_api.payload_crypto import MasterKeyError, open_sealed, seal
@@ -70,18 +71,23 @@ def test_wrong_key_cannot_open() -> None:
 
 
 def test_malformed_master_key_is_rejected(monkeypatch) -> None:
+    payload_crypto._cached_keyring.cache_clear()
     monkeypatch.setattr(
         "abx_api.payload_crypto.settings",
-        SimpleNamespace(payload_master_key="not-base64!!"),
+        SimpleNamespace(payload_master_key="not-base64!!", payload_retired_keys=""),
     )
     with pytest.raises(MasterKeyError):
         seal(b"x")
 
 
 def test_wrong_length_master_key_is_rejected(monkeypatch) -> None:
+    payload_crypto._cached_keyring.cache_clear()
     monkeypatch.setattr(
         "abx_api.payload_crypto.settings",
-        SimpleNamespace(payload_master_key=base64.b64encode(b"tooshort").decode()),
+        SimpleNamespace(
+            payload_master_key=base64.b64encode(b"tooshort").decode(),
+            payload_retired_keys="",
+        ),
     )
     with pytest.raises(MasterKeyError):
         seal(b"x")

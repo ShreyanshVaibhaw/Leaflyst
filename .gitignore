@@ -1,10 +1,16 @@
 # Local-only planning and explanation documents - never push to GitHub
-plan.md
-blueprint.md
+plan*.md
+blueprint*.md
+securityblueprint*.md
 *explanation*.md
 
-# Generated teaching/course artifacts (not project source; also skews lint runs)
-teachme-course/
+# Generated learning material - courses, tutorials, walkthroughs, guides.
+# Personal study aids, not project source; also skews lint runs.
+*course*/
+*tutorial*/
+*walkthrough*/
+*tutorial*.md
+*walkthrough*.md
 
 # Local-only media and pitch materials - large binaries, keep out of git
 *.mp4

@@ -15,12 +15,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
-from abx_api.auth import require_admin
 from abx_api.ingest import ingest_events
+from abx_api.rbac import require_revoke
 from abx_api.settings import settings
 from abx_api.store import ch_client, pg_pool
 
-router = APIRouter(prefix="/v1/revocation", dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/v1/revocation", dependencies=[Depends(require_revoke)])
 
 
 class ImpactPreview(BaseModel):

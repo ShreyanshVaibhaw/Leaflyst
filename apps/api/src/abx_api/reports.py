@@ -9,13 +9,13 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
-from abx_api.auth import require_admin
+from abx_api.rbac import require_read
 from abx_api.replay import GapMarker, SessionSummary, TimelineEvent, _load_session
 from abx_api.settings import settings
 from abx_api.store import pg_pool, s3_client
 from abx_api.verify import VerifyResult
 
-router = APIRouter(prefix="/v1/reports", dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/v1/reports", dependencies=[Depends(require_read)])
 
 
 class ReportCredential(BaseModel):

@@ -1,7 +1,12 @@
 """Environment configuration with dev defaults matching infra/docker-compose.dev.yml."""
 
+import base64
 import os
 from dataclasses import dataclass, field
+
+# Committed dev-only key for the local stack. Production must override it;
+# production_config_errors rejects this exact value.
+DEV_PAYLOAD_MASTER_KEY = "ZGV2LW9ubHktcGF5bG9hZC1tYXN0ZXIta2V5LTMyYnk="
 
 
 def _env(name: str, default: str) -> str:
@@ -54,12 +59,23 @@ class Settings:
         default_factory=lambda: int(_env("ABX_PAYLOAD_MAX_BYTES", str(32 * 1024)))
     )
     # Wraps the per-payload data keys that make erasure a single row delete.
-    # Base64-encoded 32 bytes. The default is DEV ONLY - deployments must set
-    # this, and losing it makes every stored payload permanently unreadable.
+    # Base64-encoded 32 bytes. The default is DEV ONLY and is rejected in
+    # production by production_config_errors; losing the real key makes every
+    # stored payload permanently unreadable.
     payload_master_key: str = field(
-        default_factory=lambda: _env(
-            "ABX_PAYLOAD_MASTER_KEY", "ZGV2LW9ubHktcGF5bG9hZC1tYXN0ZXIta2V5LTMyYnk="
-        )
+        default_factory=lambda: _env("ABX_PAYLOAD_MASTER_KEY", DEV_PAYLOAD_MASTER_KEY)
+    )
+    # Comma-separated 'id:base64' keys kept for READS only, so payloads written
+    # before a rotation stay readable until the re-wrap job has moved them.
+    # Removing a key here while segments still reference it fails startup.
+    payload_retired_keys: str = field(
+        default_factory=lambda: _env("ABX_PAYLOAD_RETIRED_KEYS", "")
+    )
+    # Cold class for aged payload batches. Must remain immediately readable:
+    # an archive class would make a retained payload unproducible without a
+    # restore, which an incident responder or auditor cannot wait for.
+    payload_cold_storage_class: str = field(
+        default_factory=lambda: _env("ABX_PAYLOAD_COLD_STORAGE_CLASS", "STANDARD_IA")
     )
     max_batch_events: int = field(default_factory=lambda: int(_env("ABX_MAX_BATCH", "5000")))
     scan_upload_max_bytes: int = field(
@@ -125,6 +141,41 @@ class Settings:
 settings = Settings()
 
 
+def _keyring_errors(value: Settings) -> list[str]:
+    """Validate every configured payload master key.
+
+    Kept here rather than in payload_crypto so a bad key is a startup config
+    error alongside the others, not an import-time explosion.
+    """
+    errors: list[str] = []
+    entries = [("ABX_PAYLOAD_MASTER_KEY", value.payload_master_key, True)]
+    entries += [
+        ("ABX_PAYLOAD_RETIRED_KEYS", entry, False)
+        for entry in value.payload_retired_keys.split(",")
+        if entry.strip()
+    ]
+    seen: set[str] = set()
+    for name, raw, active in entries:
+        spec = raw.strip()
+        if ":" in spec:
+            key_id, _, encoded = spec.partition(":")
+        elif active:
+            key_id, encoded = "k1", spec
+        else:
+            errors.append(f"{name} entries must be 'id:base64'")
+            continue
+        key_id = key_id.strip()
+        if key_id in seen:
+            errors.append(f"payload master key id '{key_id}' is configured twice")
+        seen.add(key_id)
+        try:
+            if len(base64.b64decode(encoded.strip(), validate=True)) != 32:
+                errors.append(f"{name} key '{key_id}' must decode to 32 bytes")
+        except Exception:  # noqa: BLE001 - any decode failure is a config error
+            errors.append(f"{name} key '{key_id}' must be valid base64")
+    return errors
+
+
 def production_config_errors(value: Settings) -> list[str]:
     """Reject unsafe production defaults before serving requests."""
     if value.environment != "production":
@@ -141,6 +192,15 @@ def production_config_errors(value: Settings) -> list[str]:
         errors.append("ABX_GITHUB_STATE_SECRET must be a strong non-default value")
     if not value.s3_server_side_encryption:
         errors.append("ABX_S3_SERVER_SIDE_ENCRYPTION must be configured")
+    # The dev default is committed to the repository. Shipping with it would
+    # encrypt every payload under a publicly known key, which also makes
+    # erasure-by-key-deletion meaningless.
+    if value.payload_master_key.split(":")[-1] == DEV_PAYLOAD_MASTER_KEY:
+        errors.append("ABX_PAYLOAD_MASTER_KEY must be set to a generated value")
+    # Every key in the keyring is validated, not just the active one: a
+    # malformed retired key is silently fatal, because it only surfaces when
+    # something tries to read a payload that key wrapped.
+    errors.extend(_keyring_errors(value))
     if value.anchor_retention_days < 1:
         errors.append("ABX_ANCHOR_RETENTION_DAYS must be at least 1")
     if value.demo_enabled and value.public_demo_max_runs_per_hour < 1:

@@ -16,10 +16,13 @@ from dataclasses import dataclass
 import boto3
 import psycopg
 
-from abx_scanner import aws, findings, gcp, github, graph
+from abx_scanner import aws, azure, findings, gcp, github, graph, slack, workspace
+from abx_scanner.azure_client import AzureClient
 from abx_scanner.db import connect_raw
 from abx_scanner.gcp_client import GcpClient
 from abx_scanner.gh_client import GitHubClient
+from abx_scanner.slack_client import SlackClient
+from abx_scanner.workspace_client import WorkspaceClient
 
 
 @dataclass
@@ -120,6 +123,105 @@ def run_gcp_scan(
                 account_id=project_id,
                 principals=len(result.service_accounts),
                 credentials=credential_count,
+                findings=len(computed),
+                api_calls=result.api_calls,
+            )
+        except Exception:
+            _finish_scan_run(conn, scan_run_id, 0, "failed")
+            raise
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def run_azure_scan(
+    tenant_id: str,
+    tenant: str,
+    subscription_id: str,
+    client: AzureClient,
+    conn: psycopg.Connection | None = None,
+) -> ScanSummary:
+    owns_conn = conn is None
+    conn = conn or connect_raw()
+    try:
+        scan_run_id = _start_scan_run(conn, tenant_id, "azure", subscription_id)
+        try:
+            result = azure.enumerate_tenant(client, tenant, subscription_id)
+            graph.persist_azure(conn, tenant_id, result)
+            computed = findings.compute_azure_findings(conn, tenant_id)
+            findings.persist_findings(conn, tenant_id, computed)
+            credential_count = sum(
+                len(principal.credentials) for principal in result.service_principals
+            )
+            _finish_scan_run(conn, scan_run_id, result.api_calls, "succeeded")
+            return ScanSummary(
+                scan_run_id=scan_run_id,
+                account_id=subscription_id,
+                principals=len(result.service_principals),
+                credentials=credential_count,
+                findings=len(computed),
+                api_calls=result.api_calls,
+            )
+        except Exception:
+            _finish_scan_run(conn, scan_run_id, 0, "failed")
+            raise
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def run_workspace_scan(
+    tenant_id: str,
+    domain: str,
+    client: WorkspaceClient,
+    conn: psycopg.Connection | None = None,
+) -> ScanSummary:
+    owns_conn = conn is None
+    conn = conn or connect_raw()
+    try:
+        scan_run_id = _start_scan_run(conn, tenant_id, "workspace", domain)
+        try:
+            result = workspace.enumerate_domain(client, domain)
+            graph.persist_workspace(conn, tenant_id, result)
+            computed = findings.compute_workspace_findings(conn, tenant_id)
+            findings.persist_findings(conn, tenant_id, computed)
+            _finish_scan_run(conn, scan_run_id, result.api_calls, "succeeded")
+            return ScanSummary(
+                scan_run_id=scan_run_id,
+                account_id=domain,
+                principals=len({grant.user_email for grant in result.grants}),
+                credentials=len(result.grants),
+                findings=len(computed),
+                api_calls=result.api_calls,
+            )
+        except Exception:
+            _finish_scan_run(conn, scan_run_id, 0, "failed")
+            raise
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def run_slack_scan(
+    tenant_id: str,
+    client: SlackClient,
+    conn: psycopg.Connection | None = None,
+) -> ScanSummary:
+    owns_conn = conn is None
+    conn = conn or connect_raw()
+    try:
+        scan_run_id = _start_scan_run(conn, tenant_id, "slack", "enterprise")
+        try:
+            result = slack.enumerate_enterprise(client)
+            graph.persist_slack(conn, tenant_id, result)
+            computed = findings.compute_slack_findings(conn, tenant_id)
+            findings.persist_findings(conn, tenant_id, computed)
+            _finish_scan_run(conn, scan_run_id, result.api_calls, "succeeded")
+            return ScanSummary(
+                scan_run_id=scan_run_id,
+                account_id=result.enterprise_id,
+                principals=len(result.apps),
+                credentials=len(result.apps),
                 findings=len(computed),
                 api_calls=result.api_calls,
             )

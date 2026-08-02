@@ -385,3 +385,167 @@ def persist_findings(conn: psycopg.Connection, tenant_id: str, findings: list[Fi
             ),
         )
     conn.commit()
+
+
+def compute_azure_findings(conn: psycopg.Connection, tenant_id: str) -> list[Finding]:
+    findings: list[Finding] = []
+    credentials = conn.execute(
+        "SELECT c.id, c.fingerprint, c.created_at_provider, c.status, p.external_id, p.id "
+        "FROM credentials c JOIN principals p ON c.owner_principal = p.id "
+        "WHERE c.tenant_id = %s AND c.provider = 'azure'",
+        (tenant_id,),
+    ).fetchall()
+    now = _now()
+    for credential_id, fingerprint, created, status, owner, principal_id in credentials:
+        reach = _blast_radius(conn, str(principal_id))
+        findings.extend(
+            _azure_rules(
+                str(credential_id), str(fingerprint), created, str(status),
+                str(owner), reach, now,
+            )
+        )
+    return findings
+
+
+def _azure_rules(
+    credential_id: str,
+    fingerprint: str,
+    created: datetime | None,
+    status: str,
+    owner: str,
+    reach: dict[str, Any],
+    now: datetime,
+) -> list[Finding]:
+    out: list[Finding] = []
+    has_admin = "admin" in reach["access_levels"]
+    has_write = "write" in reach["access_levels"]
+    if has_admin or has_write:
+        out.append(
+            Finding(
+                "over_privileged",
+                f"azure:overpriv:{fingerprint}",
+                "critical" if has_admin else "high",
+                credential_id,
+                {
+                    "fingerprint": fingerprint,
+                    "owner": owner,
+                    "scopes": reach["scopes"][:20],
+                    "reachable_resources": reach["resources"][:20],
+                    "reach_count": reach["count"],
+                    # Entra exposes expiry but not per-credential last use; that
+                    # needs sign-in logs (Entra ID P1 + AuditLog.Read.All).
+                    "last_used_available": False,
+                },
+                "Reduce this service principal to the minimum role it needs; prefer a "
+                "reader role or a narrower scope than the whole subscription.",
+            )
+        )
+    if created is not None and (now - created).days > STALE_ROTATION_DAYS:
+        out.append(
+            Finding(
+                "stale_authorization",
+                f"azure:stale:{fingerprint}",
+                "medium",
+                credential_id,
+                {
+                    "fingerprint": fingerprint,
+                    "owner": owner,
+                    "age_days": (now - created).days,
+                    "last_used_available": False,
+                },
+                f"Rotate or remove this credential; it is over "
+                f"{STALE_ROTATION_DAYS} days old.",
+            )
+        )
+    # An expired secret still attached to a privileged principal is inventory
+    # debt: it proves the principal outlived its credential rotation.
+    if status == "inactive" and (has_admin or has_write):
+        out.append(
+            Finding(
+                "orphaned_credential",
+                f"azure:orphan:{fingerprint}",
+                "medium",
+                credential_id,
+                {
+                    "fingerprint": fingerprint,
+                    "owner": owner,
+                    "reach_count": reach["count"],
+                    "last_used_available": False,
+                },
+                "Remove this expired or disabled credential; its principal still holds "
+                "write or admin role assignments.",
+            )
+        )
+    return out
+
+
+def compute_workspace_findings(conn: psycopg.Connection, tenant_id: str) -> list[Finding]:
+    """Findings for Google Workspace OAuth grants.
+
+    Dormancy is only claimed when usage is observable. When the Reports audit
+    log is unreadable the scan reports unknown, and an unknown must never be
+    rendered as a confident 'unused' - that would send someone to revoke a
+    grant their business depends on.
+    """
+    findings: list[Finding] = []
+    rows = conn.execute(
+        "SELECT c.id, c.fingerprint, p.external_id, p.id "
+        "FROM credentials c JOIN principals p ON c.owner_principal = p.id "
+        "WHERE c.tenant_id = %s AND c.provider = 'workspace'",
+        (tenant_id,),
+    ).fetchall()
+    for credential_id, fingerprint, owner, principal_id in rows:
+        reach = _blast_radius(conn, str(principal_id))
+        if "write" not in reach["access_levels"]:
+            continue
+        findings.append(
+            Finding(
+                "over_privileged",
+                f"workspace:overpriv:{fingerprint}",
+                "high",
+                str(credential_id),
+                {
+                    "fingerprint": str(fingerprint),
+                    "owner": str(owner),
+                    "scopes": reach["scopes"][:20],
+                    "reach_count": reach["count"],
+                    "last_used_available": True,
+                },
+                "Review this third-party OAuth grant; it holds broad access to user "
+                "content. Revoke it from the Admin console if it is no longer needed.",
+            )
+        )
+    return findings
+
+
+def compute_slack_findings(conn: psycopg.Connection, tenant_id: str) -> list[Finding]:
+    findings: list[Finding] = []
+    rows = conn.execute(
+        "SELECT c.id, c.fingerprint, p.external_id, p.id "
+        "FROM credentials c JOIN principals p ON c.owner_principal = p.id "
+        "WHERE c.tenant_id = %s AND c.provider = 'slack'",
+        (tenant_id,),
+    ).fetchall()
+    for credential_id, fingerprint, owner, principal_id in rows:
+        reach = _blast_radius(conn, str(principal_id))
+        if "write" not in reach["access_levels"]:
+            continue
+        findings.append(
+            Finding(
+                "over_privileged",
+                f"slack:overpriv:{fingerprint}",
+                "high",
+                str(credential_id),
+                {
+                    "fingerprint": str(fingerprint),
+                    "owner": str(owner),
+                    "scopes": reach["scopes"][:20],
+                    "reach_count": reach["count"],
+                    # Slack exposes no last-used timestamp for installed apps.
+                    "last_used_available": False,
+                },
+                "Review this installed app's write scopes against what it needs; "
+                "restrict or uninstall it from the Enterprise Grid admin console.",
+            )
+        )
+    return findings

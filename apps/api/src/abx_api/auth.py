@@ -25,6 +25,13 @@ SCAN_TOKEN_PREFIX = "abx_scan_"
 class IngestIdentity:
     tenant_id: str
     token_id: str
+    # Natural person of record for everything this token records (EU AI Act
+    # Article 12). Bound to the token when a dashboard user mints it, never
+    # asserted by the agent - a write-only token is held by something we do
+    # not trust to be honest, so a self-declared operator would be forgeable.
+    # None means the token predates operator binding: unattributed, and the
+    # evidence pack must say so rather than guess.
+    operator_ref: str | None = None
 
 
 def new_ingest_token() -> tuple[str, str]:
@@ -46,13 +53,17 @@ def ingest_identity_from_token(authorization: str = Header(default="")) -> Inges
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     with pg_pool().connection() as conn:
         row = conn.execute(
-            "SELECT tenant_id,id FROM ingest_tokens "
+            "SELECT tenant_id,id,operator_id FROM ingest_tokens "
             "WHERE token_hash = %s AND revoked_at IS NULL",
             (token_hash,),
         ).fetchone()
     if row is None:
         raise HTTPException(status_code=401, detail="invalid ingest token")
-    return IngestIdentity(tenant_id=str(row[0]), token_id=str(row[1]))
+    return IngestIdentity(
+        tenant_id=str(row[0]),
+        token_id=str(row[1]),
+        operator_ref=str(row[2]) if row[2] is not None else None,
+    )
 
 
 def tenant_from_scan_token(authorization: str = Header(default="")) -> str:
