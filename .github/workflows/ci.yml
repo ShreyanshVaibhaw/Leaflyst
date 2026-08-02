@@ -50,6 +50,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Production dependency audit
         run: pnpm audit --prod --audit-level high
+      # Development dependencies are not shipped, but they execute on every
+      # contributor machine and in this runner, which is a supply-chain path
+      # into the release even though it is not a path into the image.
+      - name: Development dependency audit
+        run: pnpm audit --audit-level high
       - name: Lint
         run: pnpm exec eslint .
       - name: Typecheck
@@ -58,6 +63,32 @@ jobs:
         run: pnpm test
       - name: Build
         run: pnpm exec next build
+
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Secret scanning is worthless against the tip alone: a credential
+          # that was committed and then deleted is still published.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+      - name: Python dependency audit
+        run: |
+          uv export --frozen --no-dev --all-packages --no-emit-workspace \
+            --format requirements-txt -o /tmp/requirements.txt
+          uv run --with pip-audit pip-audit -r /tmp/requirements.txt --progress-spinner off
+      - name: Secret scan (working tree and full history)
+        run: |
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 \
+            detect --source /repo --config /repo/.gitleaks.toml \
+            --redact --no-banner --exit-code 1
+      - name: Infrastructure misconfiguration scan
+        run: |
+          docker run --rm -v "$PWD:/repo" aquasec/trivy:0.58.1 config \
+            --quiet --severity MEDIUM,HIGH,CRITICAL --exit-code 1 /repo/infra
 
   containers:
     runs-on: ubuntu-latest
@@ -69,6 +100,25 @@ jobs:
         run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/python.Dockerfile -t leaflyst-python:release-smoke .
       - name: Build web release image
         run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/web.Dockerfile -t leaflyst-web:release-smoke .
+      # The release gate is two questions, so it is two scans. The first fails on
+      # any critical, fixed or not, because a critical with no vendor patch is a
+      # decision to make rather than a result to record. The second fails on
+      # anything the vendor has already fixed, which is unarguable: shipping it
+      # means shipping a known hole that a rebuild would have closed.
+      - name: Image vulnerability scan - no criticals
+        run: |
+          for image in leaflyst-python leaflyst-web; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:0.58.1 image --quiet --scanners vuln \
+              --severity CRITICAL --exit-code 1 "$image:release-smoke"
+          done
+      - name: Image vulnerability scan - nothing fixable left unfixed
+        run: |
+          for image in leaflyst-python leaflyst-web; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:0.58.1 image --quiet --scanners vuln --ignore-unfixed \
+              --severity HIGH,CRITICAL --exit-code 1 "$image:release-smoke"
+          done
       - name: Smoke release images
         run: python demo/container_smoke.py --skip-build
       - name: Install Syft

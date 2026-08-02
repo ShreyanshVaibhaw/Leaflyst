@@ -20,8 +20,25 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx \
-    /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
+# The Playwright base installs Node from the distribution, so its package
+# tooling lives in /usr/, not /usr/local/ where an nvm-style install would put
+# it. An earlier removal only cleared /usr/local/ and therefore did nothing.
+# gstreamer is only reachable through Chromium's media pipeline; this runtime
+# uses Chromium solely to render report PDFs, which the purge is verified not to
+# break. openssl is upgraded because it is the one vendor-fixed high in the base.
+# Chromium here sandboxes through user namespaces rather than a setuid helper,
+# so stripping setuid bits removes su/mount/ssh-keysign without weakening it -
+# the PDF path is exercised after this line to keep that claim honest.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade openssl libssl3t64 \
+    && apt-get purge -y gstreamer1.0-plugins-bad libgstreamer-plugins-bad1.0-0 \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/lib/node_modules /usr/local/lib/node_modules \
+    /usr/bin/npm /usr/bin/npx /usr/bin/yarn /usr/bin/yarnpkg /usr/bin/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+    /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+    && find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -exec chmod ug-s {} +
 WORKDIR /app
 COPY --from=build --chown=pwuser:pwuser /app/.next/standalone ./
 COPY --from=build --chown=pwuser:pwuser /app/.next/static ./.next/static
