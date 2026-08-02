@@ -537,6 +537,16 @@ export interface paths {
         /**
          * Decide Action
          * @description Evaluate one action. Never raises: a failure here is a decision, not a 500.
+         *
+         *     Authenticated by the WRITE-ONLY INGEST TOKEN, not a read token, because every
+         *     call appends a decision event to the tamper-evident chain. The recording
+         *     plane is fed only by write-only ingest tokens (blueprint 6); a read-scoped
+         *     principal able to append here could inject attacker-shaped records into the
+         *     evidence store that `/v1/chain/verify` and the compliance exports attest to.
+         *
+         *     Taking the tenant from the token rather than a query parameter is the same
+         *     rule that governs ingest: a caller must not be able to name the tenant it
+         *     writes into.
          */
         post: operations["decide_action_v1_policy_decide_post"];
         delete?: never;
@@ -3053,11 +3063,8 @@ export interface operations {
     };
     decide_action_v1_policy_decide_post: {
         parameters: {
-            query: {
-                tenant_id: string;
-            };
+            query?: never;
             header?: {
-                "x-abx-admin-key"?: string;
                 authorization?: string;
             };
             path?: never;

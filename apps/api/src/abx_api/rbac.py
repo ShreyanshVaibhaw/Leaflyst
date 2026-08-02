@@ -139,6 +139,11 @@ def require(capability: Capability) -> Callable[..., Principal]:
             raise HTTPException(status_code=404, detail="not found")
         return principal
 
+    # Lets the route-guard inventory read a route's capability off the resolved
+    # dependency instead of matching on the name it was bound under. The two
+    # guard defects found on August 2 both hid behind a stale alias name whose
+    # value had been changed underneath it.
+    dependency.abx_capability = capability  # type: ignore[attr-defined]
     return dependency
 
 
