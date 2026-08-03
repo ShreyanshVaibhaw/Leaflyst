@@ -75,3 +75,37 @@ For the record, and so that this list is not mistaken for the whole picture:
 - the two fixable OpenSSL highs in the web image were closed by upgrading in the final stage;
 - the two vendor-unfixed gstreamer highs were removed by purging the package, after confirming Chromium still renders report PDFs without it; and
 - the npm, npx, yarn, and corepack tooling was removed from the web runtime, closing the condition behind SEC-B01 rather than waiting for the base image to stay clean.
+
+## Repository controls
+
+These live in GitHub's settings rather than in the tree, so they are recorded here.
+A control that exists only in a web UI is one nobody can review in a pull request, and one nobody notices being switched off.
+
+### Rulesets
+
+`protect-main` (branch, active) applies to the default branch: block deletion, block force-push, require a pull request, and require the `python`, `web`, `supply-chain`, and `containers` checks, each pinned to the GitHub Actions app so a status of the same name from another source cannot satisfy them.
+Branches must be up to date with the base before merging, so a pull request cannot be merged against a base that predates a newly added check.
+
+`immutable-tags` (tag, active) blocks deletion and force-movement of every tag, which keeps a published release tag pointing at the code it was cut from.
+
+The bypass actor on `protect-main` is the repository admin role, scoped to `pull_request` rather than `always`.
+This is deliberate and load-bearing.
+A pull-request-scoped bypass can only be exercised by merging a pull request, and no pull request merge can force-push or delete a branch, so history rewriting stays closed to everyone while an emergency merge past a red check stays possible and leaves a durable record.
+The alternative, an empty bypass list, sounds stronger but is weaker in practice: bypass is per-ruleset rather than per-rule, so the only emergency lever would be disabling the whole ruleset, dropping force-push protection and every required check at once.
+
+### Actions policy
+
+Default workflow token permissions are read-only, and workflows may not approve pull requests.
+
+Actions are restricted to an allowlist: GitHub-owned actions plus the four third-party actions this repository actually uses.
+SHA pinning is enforced at the platform level, so a workflow referencing an action by mutable tag is refused before it runs rather than caught in review.
+That makes the pinning discipline a property of the repository instead of a convention someone has to remember.
+
+Adding a new action is therefore a two-part change: the workflow edit, and an allowlist entry.
+That friction is the point.
+
+### What these controls do not cover
+
+Nothing binds a check *name* to check *content*.
+A single pull request can rewrite `.github/workflows/ci.yml` and still report four green checks of the right names from the right app.
+The platform fix is an organization-only ruleset rule, unavailable to a user-owned repository, so the current mitigation is that exactly one account has write access.
