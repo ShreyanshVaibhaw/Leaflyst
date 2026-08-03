@@ -14,12 +14,16 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from abx_api.export_safety import csv_cell
-from abx_api.rbac import require_read
+from abx_api.identifiers import ResourceId
+from abx_api.rbac import require_read, require_triage
 from abx_api.store import ch_client, get_payload, pg_pool
 from abx_api.verify import VerifyResult, verify_tenant_chain
 
 router = APIRouter(prefix="/v1/replay")
-admin = [Depends(require_read)]
+# Named for what it grants. The previous name was `admin`, which asserted a
+# privilege level it did not confer and made a read-guarded POST read as
+# correct at every call site.
+read_only = [Depends(require_read)]
 
 
 class CredentialLink(BaseModel):
@@ -132,7 +136,7 @@ def _credential_map(tenant_id: str, fingerprints: set[str]) -> dict[str, Credent
     }
 
 
-@router.get("/agents", response_model=list[AgentSummary], dependencies=admin)
+@router.get("/agents", response_model=list[AgentSummary], dependencies=read_only)
 def agents(tenant_id: str) -> list[AgentSummary]:
     traffic = _query(
         "SELECT agent_id, countDistinct(session_id) AS sessions, count() AS events, "
@@ -176,8 +180,12 @@ def agents(tenant_id: str) -> list[AgentSummary]:
     return output
 
 
-@router.get("/agents/{agent_id}/sessions", response_model=list[SessionSummary], dependencies=admin)
-def agent_sessions(tenant_id: str, agent_id: str) -> list[SessionSummary]:
+@router.get(
+    "/agents/{agent_id}/sessions",
+    response_model=list[SessionSummary],
+    dependencies=read_only,
+)
+def agent_sessions(tenant_id: str, agent_id: ResourceId) -> list[SessionSummary]:
     rows = _query(
         "SELECT session_id, any(agent_id) AS agent_id, min(ts) AS started_at, "
         "max(ts) AS ended_at, count() AS event_count, countIf(op_outcome = 'error') AS errors "
@@ -277,7 +285,7 @@ def _load_session(
     )
 
 
-@router.get("/sessions/{session_id}", response_model=SessionDetail, dependencies=admin)
+@router.get("/sessions/{session_id}", response_model=SessionDetail, dependencies=read_only)
 def session_detail(tenant_id: str, session_id: str) -> SessionDetail:
     return _load_session(tenant_id, session_id)
 
@@ -285,9 +293,9 @@ def session_detail(tenant_id: str, session_id: str) -> SessionDetail:
 @router.get(
     "/credentials/{credential_id}/events",
     response_model=list[TimelineEvent],
-    dependencies=admin,
+    dependencies=read_only,
 )
-def credential_events(tenant_id: str, credential_id: str) -> list[TimelineEvent]:
+def credential_events(tenant_id: str, credential_id: ResourceId) -> list[TimelineEvent]:
     with pg_pool().connection() as conn:
         row = conn.execute(
             "SELECT fingerprint FROM credentials WHERE tenant_id = %s AND id = %s",
@@ -313,7 +321,18 @@ def credential_events(tenant_id: str, credential_id: str) -> list[TimelineEvent]
     return events
 
 
-@router.post("/sessions/{session_id}/share", response_model=ShareCreated, dependencies=admin)
+# Minting a share link creates a DURABLE, UNAUTHENTICATED public URL serving
+# full session detail: GET /shared/{token} carries no guard, because the
+# token is the credential. A read-only principal able to call this could
+# convert scoped, revocable, tenant-bound access into permanent public
+# exposure. Incident response is the documented purpose, so it belongs to
+# the responder capability - not to viewer, and not to an auditor, since an
+# external assessor minting public links to tenant data is exactly wrong.
+@router.post(
+    "/sessions/{session_id}/share",
+    response_model=ShareCreated,
+    dependencies=[Depends(require_triage)],
+)
 def create_share(
     tenant_id: str, session_id: str, request: ShareRequest
 ) -> ShareCreated:
@@ -349,7 +368,7 @@ def shared_session(token: str) -> SessionDetail:
 @router.get(
     "/sessions/{session_id}/blast-radius.csv",
     response_class=PlainTextResponse,
-    dependencies=admin,
+    dependencies=read_only,
 )
 def blast_radius_csv(tenant_id: str, session_id: str) -> PlainTextResponse:
     detail = _load_session(tenant_id, session_id)
@@ -369,7 +388,7 @@ def blast_radius_csv(tenant_id: str, session_id: str) -> PlainTextResponse:
 @router.get(
     "/sessions/{session_id}/blast-radius.json",
     response_model=list[BlastResource],
-    dependencies=admin,
+    dependencies=read_only,
 )
 def blast_radius_json(tenant_id: str, session_id: str) -> list[BlastResource]:
     return _load_session(tenant_id, session_id).blast_radius

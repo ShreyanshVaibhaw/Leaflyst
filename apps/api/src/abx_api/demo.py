@@ -68,8 +68,74 @@ def _demo_tenant(owner_tenant_id: str) -> str:
         return str(tenant[0])
 
 
+# Tables the public demo writes into, in an order that respects their foreign
+# keys. Reclaiming an expired sandbox has to remove the rows, not just the
+# bookkeeping row that points at them.
+_DEMO_TENANT_TABLES = (
+    "DELETE FROM permission_reaches_resource WHERE permission_id IN "
+    "(SELECT id FROM permissions WHERE tenant_id = ANY(%(ids)s))",
+    "DELETE FROM agent_holds_credential WHERE credential_id IN "
+    "(SELECT id FROM credentials WHERE tenant_id = ANY(%(ids)s))",
+    "DELETE FROM alerts WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM session_shares WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM session_sequences WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM chain_heads WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM metering_token_daily WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM metering_daily WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM findings WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM scan_runs WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM permissions WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM resources WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM credentials WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM agents WHERE tenant_id = ANY(%(ids)s)",
+    "DELETE FROM principals WHERE tenant_id = ANY(%(ids)s)",
+)
+
+
+def purge_expired_public_demos(now: datetime | None = None) -> int:
+    """Reclaim sandboxes past their TTL. Returns how many were reclaimed.
+
+    Without this the live-sandbox cap below would eventually be a permanent
+    closed sign rather than a limit: every slot taken, none ever returned.
+    """
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    with pg_pool().connection() as conn:
+        expired = conn.execute(
+            "SELECT demo_tenant_id FROM public_demo_tenants WHERE expires_at <= %s "
+            "FOR UPDATE SKIP LOCKED",
+            (current,),
+        ).fetchall()
+        if not expired:
+            return 0
+        ids = [row[0] for row in expired]
+        for statement in _DEMO_TENANT_TABLES:
+            conn.execute(statement, {"ids": ids})
+        conn.execute("DELETE FROM public_demo_tenants WHERE demo_tenant_id = ANY(%s)", (ids,))
+    return len(ids)
+
+
+def _public_demo_budget(conn: object, now: datetime, creating: bool) -> None:
+    """Enforce the limits that a rotated visitor cookie cannot step around.
+
+    The per-visitor limit is keyed on a value the visitor supplies, so on its own
+    it only restrains a visitor who keeps the same cookie. These two do not care
+    who is asking.
+    """
+    live, runs = conn.execute(  # type: ignore[attr-defined]
+        "SELECT count(*), COALESCE(sum(runs_in_window) FILTER "
+        "(WHERE window_started_at > %(now)s - interval '1 hour'), 0) "
+        "FROM public_demo_tenants",
+        {"now": now},
+    ).fetchone()
+    if int(runs) >= settings.public_demo_max_runs_per_hour_global:
+        raise HTTPException(status_code=429, detail="public demo is at its hourly budget")
+    if creating and int(live) >= settings.public_demo_max_live_tenants:
+        raise HTTPException(status_code=429, detail="public demo has no free sandbox")
+
+
 def _public_demo_tenant(visitor_ref: str) -> str:
     now = datetime.now(UTC)
+    purge_expired_public_demos(now)
     with pg_pool().connection() as conn:
         conn.execute(
             "SELECT pg_advisory_xact_lock(hashtext(%s))",
@@ -80,6 +146,7 @@ def _public_demo_tenant(visitor_ref: str) -> str:
             "FROM public_demo_tenants WHERE visitor_ref=%s",
             (visitor_ref,),
         ).fetchone()
+        _public_demo_budget(conn, now, creating=existing is None)
         if existing is None:
             tenant = conn.execute(
                 "INSERT INTO tenants (name) VALUES ('PocketOS public sandbox') RETURNING id"

@@ -1,4 +1,4 @@
-FROM python:3.12-slim-bookworm@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b
+FROM python:3.12-slim-trixie@sha256:57cd7c3a7a273101a6485ba99423ee568157882804b1124b4dd04266317710de
 
 ARG GIT_COMMIT=unknown
 LABEL org.opencontainers.image.source="https://github.com/ShreyanshVaibhaw/Leaflyst" \
@@ -26,11 +26,28 @@ COPY infra/postgres infra/postgres
 RUN uv sync --frozen --no-dev --package abx-api \
     && rm /bin/uv /bin/uvx \
     && groupadd --gid 10001 abx \
-    && useradd --uid 10001 --gid abx --no-create-home --shell /usr/sbin/nologin abx
+    && useradd --uid 10001 --gid abx --no-create-home --shell /usr/sbin/nologin abx \
+    && dpkg --purge --force-remove-essential perl-base \
+    && find / -xdev -type f \( -perm -4000 -o -perm -2000 \) -exec chmod ug-s {} +
+
+# perl-base is Debian-Essential but nothing in this runtime interprets Perl: the
+# image runs uvicorn, the workers, and infra/migrate.py, and no package is
+# installed after this line. Debian ships no fix for its four open criticals, so
+# purging is the only way to reach the zero-critical release gate. Removing it
+# after the last apt/dpkg call keeps maintainer scripts intact during the build.
+#
+# The setuid strip matters more than it looks. The image shipped su, mount,
+# passwd, and eight others owned by root with the setuid bit, all reachable by
+# uid 10001. The open util-linux advisory is only accepted as low risk because
+# nothing here can escalate through those binaries, and this is the line that
+# makes that true rather than assumed.
 
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
 
-CMD ["uvicorn", "abx_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+# --no-server-header: uvicorn writes its banner in the protocol layer, below the
+# point any ASGI middleware can reach, so this is the only place to remove it.
+CMD ["uvicorn", "abx_api.main:app", "--host", "0.0.0.0", "--port", "8000", \
+     "--no-access-log", "--no-server-header"]

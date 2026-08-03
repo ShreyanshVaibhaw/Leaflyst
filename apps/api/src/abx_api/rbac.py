@@ -39,10 +39,11 @@ from enum import StrEnum
 
 from fastapi import Header, HTTPException
 
+from abx_api.identifiers import is_uuid
 from abx_api.settings import settings
 from abx_api.store import pg_pool
 
-READ_TOKEN_PREFIX = "abx_read_"
+READ_TOKEN_PREFIX = "abx_read_"  # noqa: S105 - a token prefix, not a token
 
 
 class Capability(StrEnum):
@@ -122,10 +123,15 @@ def require(capability: Capability) -> Callable[..., Principal]:
     """
 
     def dependency(
-        tenant_id: str = "",
+        tenant_id: str | None = None,
         x_abx_admin_key: str = Header(default=""),
         authorization: str = Header(default=""),
     ) -> Principal:
+        # None means the route does not take a tenant. An empty or malformed
+        # string means the caller sent one and got it wrong, which is a 400 and
+        # not a 500 reached by way of a failed UUID cast in the database.
+        if tenant_id is not None and not is_uuid(tenant_id):
+            raise HTTPException(status_code=400, detail="tenant_id must be a UUID")
         principal = resolve_principal(x_abx_admin_key, authorization)
         if not principal.may(capability):
             raise HTTPException(
@@ -139,6 +145,11 @@ def require(capability: Capability) -> Callable[..., Principal]:
             raise HTTPException(status_code=404, detail="not found")
         return principal
 
+    # Lets the route-guard inventory read a route's capability off the resolved
+    # dependency instead of matching on the name it was bound under. The two
+    # guard defects found on August 2 both hid behind a stale alias name whose
+    # value had been changed underneath it.
+    dependency.abx_capability = capability  # type: ignore[attr-defined]
     return dependency
 
 

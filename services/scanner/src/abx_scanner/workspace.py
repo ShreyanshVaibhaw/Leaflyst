@@ -126,7 +126,7 @@ def _last_used(
             "items",
             {"maxResults": "1000", "startTime": start},
         )
-    except Exception:  # noqa: BLE001 - absence of the log is a coverage fact
+    except Exception:
         return {}, False
 
     index: dict[tuple[str, str], datetime] = {}

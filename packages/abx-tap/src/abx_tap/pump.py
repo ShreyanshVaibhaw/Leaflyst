@@ -52,7 +52,7 @@ def run_pump(
     """
     # Windows: CreateProcess does not resolve "npx" -> "npx.cmd"; which() does.
     resolved = shutil.which(command[0]) or command[0]
-    child = subprocess.Popen(
+    child = subprocess.Popen(  # noqa: S603 - the operator's own MCP server command
         [resolved, *command[1:]],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,

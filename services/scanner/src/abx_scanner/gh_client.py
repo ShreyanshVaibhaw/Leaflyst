@@ -36,7 +36,7 @@ Opener = Callable[[urllib.request.Request], Response]
 
 def _urllib_opener(req: urllib.request.Request) -> Response:
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - operator-configured destination, never a caller-supplied URL
             return Response(resp.status, dict(resp.headers), resp.read())
     except urllib.error.HTTPError as e:
         return Response(e.code, dict(e.headers or {}), e.read())

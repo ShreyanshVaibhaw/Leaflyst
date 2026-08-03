@@ -3451,6 +3451,7 @@
             "name": "alert_id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "title": "Alert Id",
               "type": "string"
             }
@@ -3609,9 +3610,15 @@
             "name": "tenant_id",
             "required": false,
             "schema": {
-              "default": "",
-              "title": "Tenant Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
             }
           },
           {
@@ -3812,6 +3819,7 @@
             "name": "credential_id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "title": "Credential Id",
               "type": "string"
             }
@@ -4168,6 +4176,7 @@
             "name": "finding_id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "title": "Finding Id",
               "type": "string"
             }
@@ -4358,9 +4367,15 @@
             "name": "tenant_id",
             "required": false,
             "schema": {
-              "default": "",
-              "title": "Tenant Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
             }
           },
           {
@@ -4850,9 +4865,15 @@
             "name": "tenant_id",
             "required": false,
             "schema": {
-              "default": "",
-              "title": "Tenant Id",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tenant Id"
             }
           },
           {
@@ -5082,28 +5103,9 @@
     },
     "/v1/policy/decide": {
       "post": {
-        "description": "Evaluate one action. Never raises: a failure here is a decision, not a 500.",
+        "description": "Evaluate one action. Never raises: a failure here is a decision, not a 500.\n\nAuthenticated by the WRITE-ONLY INGEST TOKEN, not a read token, because every\ncall appends a decision event to the tamper-evident chain. The recording\nplane is fed only by write-only ingest tokens (blueprint 6); a read-scoped\nprincipal able to append here could inject attacker-shaped records into the\nevidence store that `/v1/chain/verify` and the compliance exports attest to.\n\nTaking the tenant from the token rather than a query parameter is the same\nrule that governs ingest: a caller must not be able to name the tenant it\nwrites into.",
         "operationId": "decide_action_v1_policy_decide_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "tenant_id",
-            "required": true,
-            "schema": {
-              "title": "Tenant Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "x-abx-admin-key",
-            "required": false,
-            "schema": {
-              "default": "",
-              "title": "X-Abx-Admin-Key",
-              "type": "string"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -5222,6 +5224,7 @@
             "name": "agent_id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "title": "Agent Id",
               "type": "string"
             }
@@ -5294,6 +5297,7 @@
             "name": "credential_id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "title": "Credential Id",
               "type": "string"
             }
@@ -5827,6 +5831,7 @@
             "name": "credential_id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "title": "Credential Id",
               "type": "string"
             }
@@ -5905,6 +5910,7 @@
             "name": "credential_id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
               "title": "Credential Id",
               "type": "string"
             }

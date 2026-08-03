@@ -17,8 +17,8 @@ from fastapi import Header, HTTPException
 from abx_api.settings import settings
 from abx_api.store import pg_pool
 
-TOKEN_PREFIX = "abx_ingest_"
-SCAN_TOKEN_PREFIX = "abx_scan_"
+TOKEN_PREFIX = "abx_ingest_"  # noqa: S105 - a token prefix, not a token
+SCAN_TOKEN_PREFIX = "abx_scan_"  # noqa: S105 - a token prefix, not a token
 
 
 @dataclass(frozen=True)

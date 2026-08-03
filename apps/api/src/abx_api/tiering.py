@@ -105,7 +105,7 @@ def run_tiering(now: datetime | None = None, limit: int = 1000) -> TieringResult
                 StorageClass=target_class,
                 MetadataDirective="COPY",
             )
-        except Exception:  # noqa: BLE001 - a cost optimisation must never lose data
+        except Exception:
             # The payload is untouched and still readable; only the saving is
             # lost. Surfaced so a store that refuses the class is visible
             # instead of showing up as an unexplained bill months later.

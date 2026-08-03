@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+from dataclasses import replace
 
 import psycopg
 from abx_api.main import app
@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 @requires_stack
 def test_pocketos_demo_runs_unattended_and_is_sandboxed(tenant, monkeypatch) -> None:
     tenant_id, _ = tenant
-    monkeypatch.setattr("abx_api.demo.settings", SimpleNamespace(demo_enabled=True))
+    monkeypatch.setattr("abx_api.demo.settings", replace(settings, demo_enabled=True))
     response = TestClient(app).post(
         "/v1/demo/run",
         params={"tenant_id": tenant_id},
@@ -52,9 +52,13 @@ def test_pocketos_demo_runs_unattended_and_is_sandboxed(tenant, monkeypatch) -> 
 def test_public_demo_is_per_visitor_rate_limited_and_read_only(monkeypatch) -> None:
     visitor_a = "a" * 64
     visitor_b = "b" * 64
+    # replace() rather than a SimpleNamespace: a stand-in that only carries the
+    # fields this test happens to read silently stops exercising every limit
+    # added afterwards, which is how an unbounded path hides behind a green test.
     monkeypatch.setattr(
         "abx_api.demo.settings",
-        SimpleNamespace(
+        replace(
+            settings,
             demo_enabled=True,
             public_demo_max_runs_per_hour=2,
             public_demo_ttl_hours=1,

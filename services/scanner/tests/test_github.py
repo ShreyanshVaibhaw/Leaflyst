@@ -74,7 +74,7 @@ def _routes() -> dict[str, object]:
 def make_client() -> GitHubClient:
     routes = _routes()
 
-    def opener(req) -> Response:  # noqa: ANN001
+    def opener(req) -> Response:
         path = req.full_url.replace("https://api.github.com", "")
         if path not in routes:
             return Response(404, {}, b"")

@@ -124,7 +124,7 @@ class Emitter:
             body = path.read_bytes()
         except OSError:
             return True  # another process took it
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 - operator-configured destination, never a caller-supplied URL
             self.ingest_url.rstrip("/") + "/v1/ingest",
             data=body,
             headers={
@@ -134,7 +134,7 @@ class Emitter:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=SEND_TIMEOUT_S) as resp:
+            with urllib.request.urlopen(req, timeout=SEND_TIMEOUT_S) as resp:  # noqa: S310 - operator-configured destination, never a caller-supplied URL
                 if resp.status == 200:
                     path.unlink(missing_ok=True)
                     return True

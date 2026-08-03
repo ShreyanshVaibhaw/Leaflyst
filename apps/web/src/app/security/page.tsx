@@ -1,5 +1,11 @@
 import { PageHeader, Panel } from "@/components/ui";
 
+// Rendered per request so the Content Security Policy nonce set in proxy.ts
+// can be stamped into this page's inline scripts. A cached HTML body carries
+// whatever nonce existed when it was built, which never matches the nonce sent
+// with the response, so the browser blocks hydration on a page that looks fine.
+export const dynamic = "force-dynamic";
+
 export default function SecurityPage() {
   return <>
     <PageHeader eyebrow="Trust center" title="Security and responsible disclosure" description="How Leaflyst protects recorded agent activity and how to report a vulnerability." />

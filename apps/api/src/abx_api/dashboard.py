@@ -16,6 +16,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from abx_api.export_safety import csv_cell
+from abx_api.identifiers import ResourceId
 from abx_api.rbac import require_read
 from abx_api.store import pg_pool
 
@@ -110,11 +111,17 @@ def findings_list(
     if provider:
         clauses.append("c.provider = %s")
         params.append(provider)
-    rows = _rows(
-        "SELECT f.id, f.finding_type, f.severity, f.evidence, f.remediation, c.provider "
+    # Every clause is a literal from the list above and every value is bound
+    # as a parameter; nothing a caller sends is concatenated into the text.
+    query = (
+
+        "SELECT f.id, f.finding_type, f.severity, f.evidence, f.remediation, c.provider "  # noqa: S608
         "FROM findings f LEFT JOIN credentials c ON c.id = f.credential_id "
-        f"WHERE {' AND '.join(clauses)} "  # noqa: S608 - clause list is static
-        "ORDER BY array_position(%s::text[], f.severity), f.finding_type",
+        f"WHERE {' AND '.join(clauses)} "
+        "ORDER BY array_position(%s::text[], f.severity), f.finding_type"
+    )
+    rows = _rows(
+        query,
         (*params, SEVERITY_ORDER),
     )
     return [
@@ -136,7 +143,7 @@ class FindingDetail(FindingSummary):
 
 
 @router.get("/findings/{finding_id}", response_model=FindingDetail)
-def finding_detail(tenant_id: str, finding_id: str) -> FindingDetail:
+def finding_detail(tenant_id: str, finding_id: ResourceId) -> FindingDetail:
     rows = _rows(
         "SELECT f.id, f.finding_type, f.severity, f.evidence, f.remediation, c.provider "
         "FROM findings f LEFT JOIN credentials c ON c.id = f.credential_id "
@@ -201,7 +208,7 @@ def credentials_list(tenant_id: str) -> list[CredentialSummary]:
 
 
 @router.get("/credentials/{credential_id}", response_model=CredentialDetail)
-def credential_detail(tenant_id: str, credential_id: str) -> CredentialDetail:
+def credential_detail(tenant_id: str, credential_id: ResourceId) -> CredentialDetail:
     rows = _rows(
         "SELECT c.id, c.provider, c.kind, c.fingerprint, p.external_id, "
         "c.last_used_at, c.status, c.created_at_provider, "

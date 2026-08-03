@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel
 
+from abx_api.identifiers import ResourceId
 from abx_api.ingest import ingest_events
 from abx_api.rbac import require_revoke
 from abx_api.settings import settings
@@ -96,7 +97,7 @@ class GitHubRevokeAdapter:
             method, body = "DELETE", None
         else:
             raise ValueError("unsupported GitHub credential kind")
-        request = urllib.request.Request(  # noqa: S310 - fixed GitHub HTTPS root
+        request = urllib.request.Request(
             "https://api.github.com" + path, method=method,
             data=json.dumps(body).encode() if body else None,
             headers={
@@ -137,7 +138,7 @@ def _credential(tenant_id: str, credential_id: str) -> dict[str, Any]:
 
 
 @router.get("/{credential_id}/impact", response_model=ImpactPreview)
-def impact(tenant_id: str, credential_id: str) -> ImpactPreview:
+def impact(tenant_id: str, credential_id: ResourceId) -> ImpactPreview:
     credential = _credential(tenant_id, credential_id)
     fingerprint = credential["fingerprint"]
     result = ch_client().query(
@@ -232,7 +233,7 @@ def adapter_for(provider: str) -> RevokeAdapter:
 
 
 @router.post("/{credential_id}", response_model=RevokeResult)
-def revoke(tenant_id: str, credential_id: str, request: RevokeRequest) -> RevokeResult:
+def revoke(tenant_id: str, credential_id: ResourceId, request: RevokeRequest) -> RevokeResult:
     preview = impact(tenant_id, credential_id)
     credential = _credential(tenant_id, credential_id)
     if request.confirmation != preview.fingerprint:

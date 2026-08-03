@@ -42,7 +42,7 @@ class _Origin(BaseHTTPRequestHandler):
     def log_message(self, *_args: object) -> None:
         pass
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else b""
         _Origin.received.append({

@@ -4,6 +4,7 @@ account seeded with a realistic mix of agent credentials.
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Iterator
 
@@ -21,7 +22,17 @@ def _pg_up() -> bool:
         return False
 
 
-requires_pg = pytest.mark.skipif(not _pg_up(), reason="postgres dev stack not running")
+_PG_UP = _pg_up()
+
+# Same rule as apps/api/tests/conftest.py: where the stack is declared present,
+# its absence is a failure rather than a quiet skip.
+if os.environ.get("ABX_REQUIRE_STACK") and not _PG_UP:
+    raise RuntimeError(
+        "ABX_REQUIRE_STACK is set but Postgres is unreachable; "
+        "scanner integration tests would have skipped silently"
+    )
+
+requires_pg = pytest.mark.skipif(not _PG_UP, reason="postgres dev stack not running")
 
 
 @pytest.fixture
@@ -51,7 +62,7 @@ def tenant() -> Iterator[str]:
             "findings", "permissions", "resources", "credentials",
             "principals", "agents", "scan_runs",
         ):
-            conn.execute(f"DELETE FROM {table} WHERE tenant_id = %s", (tenant_id,))  # noqa: S608
+            conn.execute(f"DELETE FROM {table} WHERE tenant_id = %s", (tenant_id,))
         conn.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
         conn.commit()
 

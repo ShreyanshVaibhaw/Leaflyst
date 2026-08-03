@@ -6,6 +6,7 @@ import {
   clerkSecretKey,
   productionAuthRequired,
 } from "@/lib/auth";
+import { securityResponse } from "@/lib/csp";
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -21,12 +22,16 @@ export default clerkEnabled
       if (!isPublicRoute(req)) {
         await auth.protect();
       }
+      return securityResponse(req);
     }, { publishableKey: clerkPublishableKey, secretKey: clerkSecretKey })
   : productionAuthRequired
     ? (request: NextRequest) => isPublicRoute(request)
-      ? NextResponse.next()
-      : new NextResponse("Authentication is not configured", { status: 503 })
-    : () => NextResponse.next();
+      ? securityResponse(request)
+      : securityResponse(
+          request,
+          new NextResponse("Authentication is not configured", { status: 503 }),
+        )
+    : (request: NextRequest) => securityResponse(request);
 
 export const config = {
   matcher: [

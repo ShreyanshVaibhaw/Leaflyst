@@ -30,10 +30,12 @@
     "vitest": "^3.2.4"
   },
   "pnpm": {
+    "comment": "Ranges, not exact versions. An override keyed on the one version that happened to resolve stops applying the moment a transitive dependency moves, which is how postcss was pinned to 8.5.18 and then 8.5.18 itself became vulnerable. Each key names the vulnerable range from the advisory so the override keeps holding as the tree shifts.",
     "overrides": {
-      "postcss@8.4.31": "8.5.18",
-      "postcss@8.5.16": "8.5.18",
-      "sharp@0.34.5": "0.35.0"
+      "brace-expansion@<1.1.18": "1.1.18",
+      "brace-expansion@>=4.0.0 <5.0.9": "5.0.9",
+      "postcss@<8.5.23": "8.5.23",
+      "sharp@<0.35.0": "0.35.0"
     }
   }
 }

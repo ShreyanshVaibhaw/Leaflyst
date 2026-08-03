@@ -136,6 +136,40 @@ class Settings:
     public_demo_ttl_hours: int = field(
         default_factory=lambda: int(_env("ABX_PUBLIC_DEMO_TTL_HOURS", "24"))
     )
+    # The per-visitor demo limit is keyed on a value the visitor chooses, so it
+    # bounds one polite visitor and nothing else. These bound the whole feature.
+    public_demo_max_runs_per_hour_global: int = field(
+        default_factory=lambda: int(_env("ABX_PUBLIC_DEMO_GLOBAL_RUNS_PER_HOUR", "200"))
+    )
+    public_demo_max_live_tenants: int = field(
+        default_factory=lambda: int(_env("ABX_PUBLIC_DEMO_MAX_LIVE_TENANTS", "500"))
+    )
+    # How many reverse proxies sit in front of this process. Zero means the peer
+    # address IS the client and X-Forwarded-For is ignored outright, which is the
+    # only safe default: a forwarded header from an untrusted peer is just a
+    # request body with a header's name.
+    trusted_proxy_hops: int = field(
+        default_factory=lambda: int(_env("ABX_TRUSTED_PROXY_HOPS", "0"))
+    )
+    rate_limit_enabled: bool = field(
+        default_factory=lambda: _env("ABX_RATE_LIMIT_ENABLED", "true").lower() == "true"
+    )
+    rate_limit_window_seconds: int = field(
+        default_factory=lambda: int(_env("ABX_RATE_LIMIT_WINDOW_SECONDS", "60"))
+    )
+    # Per caller (token if presented, otherwise client address).
+    rate_limit_requests: int = field(
+        default_factory=lambda: int(_env("ABX_RATE_LIMIT_REQUESTS", "600"))
+    )
+    # Per caller, for routes that fan out into object storage, PDF rendering, or
+    # a full-chain read. One caller can exhaust the process with very few of these.
+    rate_limit_costly_requests: int = field(
+        default_factory=lambda: int(_env("ABX_RATE_LIMIT_COSTLY_REQUESTS", "30"))
+    )
+    # Across every caller, so a distributed flood still meets a ceiling.
+    rate_limit_global_requests: int = field(
+        default_factory=lambda: int(_env("ABX_RATE_LIMIT_GLOBAL_REQUESTS", "6000"))
+    )
 
 
 settings = Settings()
@@ -171,7 +205,7 @@ def _keyring_errors(value: Settings) -> list[str]:
         try:
             if len(base64.b64decode(encoded.strip(), validate=True)) != 32:
                 errors.append(f"{name} key '{key_id}' must decode to 32 bytes")
-        except Exception:  # noqa: BLE001 - any decode failure is a config error
+        except Exception:
             errors.append(f"{name} key '{key_id}' must be valid base64")
     return errors
 
@@ -186,7 +220,7 @@ def production_config_errors(value: Settings) -> list[str]:
     if value.admin_key == "dev-admin-key" or len(value.admin_key) < 32:
         errors.append("ABX_ADMIN_KEY must be a strong non-default value")
     if (
-        value.github_state_secret == "dev-github-state-secret"
+        value.github_state_secret == "dev-github-state-secret"  # noqa: S105 - rejects it
         or len(value.github_state_secret) < 32
     ):
         errors.append("ABX_GITHUB_STATE_SECRET must be a strong non-default value")

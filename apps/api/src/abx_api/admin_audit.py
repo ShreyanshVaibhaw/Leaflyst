@@ -58,7 +58,7 @@ def record_admin_action(
     })
     try:
         ingest_events(tenant_id, [event])
-    except Exception:  # noqa: BLE001 - the action already happened
+    except Exception:
         logger.exception("admin action %s was not chained for tenant %s", action, tenant_id)
         return False
     return True

@@ -100,7 +100,7 @@ def test_tamper_flips_session_verification_badge(tenant: tuple[str, str]) -> Non
         json={"events": [_event(session_id, 0, "AKIA1234567890ABCDEF")]},
     ).status_code == 200
     result = ch_client().query(
-        f"SELECT {', '.join(EVENT_COLUMNS)} FROM events "  # noqa: S608
+        f"SELECT {', '.join(EVENT_COLUMNS)} FROM events "
         "WHERE tenant_id = %(tenant)s AND session_id = %(session)s",
         parameters={"tenant": tenant_id, "session": session_id},
     )

@@ -123,7 +123,7 @@ def _parse_entry(spec: str, default_id: str | None) -> tuple[str, bytes]:
         raise MasterKeyError("a payload master key id is empty")
     try:
         key = base64.b64decode(encoded.strip(), validate=True)
-    except Exception as exc:  # noqa: BLE001 - surfaced as a config error
+    except Exception as exc:
         raise MasterKeyError(
             f"payload master key '{key_id}' must be base64-encoded {KEY_BYTES} bytes"
         ) from exc

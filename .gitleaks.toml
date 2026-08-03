@@ -1,0 +1,35 @@
+# gitleaks configuration (plansecurity SP-1).
+#
+# The default rule set is kept in full. Nothing here disables a rule or widens
+# an ignore to a token pattern: a blanket ignore for, say, "aws-access-token"
+# would silence the one finding that matters most. Every allowlist below names
+# either an exact known-public value or the specific fixture files whose whole
+# purpose is to be redaction input.
+#
+# Adding a new redaction fixture is meant to fail this scan until its file is
+# listed here. That is the review step, not an obstacle to it.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-public values and the synthetic fixtures that prove redaction works"
+regexTarget = "secret"
+regexes = [
+  # Committed dev-only payload master key; production_config_errors rejects it.
+  '''ZGV2LW9ubHktcGF5bG9hZC1tYXN0ZXIta2V5LTMyYnk=''',
+  # Azure built-in role definition ids, published by Microsoft, not credentials.
+  '''8e3af657-a8ff-443c-a75c-2fe8c4bcb635''',
+  '''b24988ac-6180-42a0-ab88-20f7382dd24c''',
+  '''18d7d88d-d35e-4fb5-a5c3-7773c20a72d9''',
+]
+paths = [
+  '''apps/api/tests/test_accuracy\.py''',
+  '''apps/api/tests/test_alerts_revocation\.py''',
+  '''apps/api/tests/test_ingest_e2e\.py''',
+  '''apps/api/tests/test_redaction\.py''',
+  '''apps/api/tests/test_replay\.py''',
+  '''apps/api/tests/test_reports\.py''',
+  '''services/rules/tests/test_baseline\.py''',
+  '''services/scanner/tests/test_gcp\.py''',
+]

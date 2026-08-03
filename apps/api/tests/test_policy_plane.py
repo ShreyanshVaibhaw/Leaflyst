@@ -42,10 +42,13 @@ def enforce(tenant_id: str, enabled: bool) -> None:
         )
 
 
-def ask(tenant_id: str, **body: object) -> dict:
+def ask(ingest_token: str, **body: object) -> dict:
+    """Decisions authenticate with the WRITE-ONLY ingest token, because every
+    call appends to the tamper-evident chain. Tenant comes from the token."""
     response = TestClient(app).post(
-        f"/v1/policy/decide?tenant_id={tenant_id}",
-        json={"agent_id": "bot", **body}, headers=ADMIN,
+        "/v1/policy/decide",
+        json={"agent_id": "bot", **body},
+        headers={"Authorization": f"Bearer {ingest_token}"},
     )
     assert response.status_code == 200, response.text
     return dict(response.json())
@@ -56,9 +59,9 @@ def ask(tenant_id: str, **body: object) -> dict:
 @requires_stack
 def test_enforcement_is_off_by_default(tenant) -> None:
     """A blocking plane must never be something a customer discovers they had."""
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     put_policy(tenant_id, DESTRUCTIVE_POLICY)
-    decision = ask(tenant_id, operation="files/delete")
+    decision = ask(ingest_token, operation="files/delete")
     assert decision["enforcement_enabled"] is False
     assert decision["allowed"] is True
     assert "enforcement is disabled" in decision["reason"]
@@ -68,10 +71,10 @@ def test_enforcement_is_off_by_default(tenant) -> None:
 
 @requires_stack
 def test_opting_in_makes_the_same_policy_block(tenant) -> None:
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     put_policy(tenant_id, DESTRUCTIVE_POLICY)
     enforce(tenant_id, True)
-    decision = ask(tenant_id, operation="files/delete")
+    decision = ask(ingest_token, operation="files/delete")
     assert decision["enforcement_enabled"] is True
     assert decision["allowed"] is False
     assert decision["policy_id"] == "no-destructive"
@@ -79,10 +82,10 @@ def test_opting_in_makes_the_same_policy_block(tenant) -> None:
 
 @requires_stack
 def test_an_unmatched_action_is_allowed_under_enforcement(tenant) -> None:
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     put_policy(tenant_id, DESTRUCTIVE_POLICY)
     enforce(tenant_id, True)
-    assert ask(tenant_id, operation="tools/list")["allowed"] is True
+    assert ask(ingest_token, operation="tools/list")["allowed"] is True
 
 
 # -- versioning -----------------------------------------------------------------
@@ -91,7 +94,7 @@ def test_an_unmatched_action_is_allowed_under_enforcement(tenant) -> None:
 def test_editing_a_policy_writes_a_new_version_and_keeps_the_old(tenant) -> None:
     """A customer must be able to prove which policy was in force at any past
     moment, so history is retained the way the event log retains events."""
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     first = put_policy(tenant_id, DESTRUCTIVE_POLICY)
     assert first["version"] == 1
     second = put_policy(tenant_id, {**DESTRUCTIVE_POLICY, "description": "tightened"})
@@ -116,11 +119,11 @@ def test_editing_a_policy_writes_a_new_version_and_keeps_the_old(tenant) -> None
 
 @requires_stack
 def test_the_decision_reports_the_version_that_matched(tenant) -> None:
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     put_policy(tenant_id, DESTRUCTIVE_POLICY)
     put_policy(tenant_id, {**DESTRUCTIVE_POLICY, "description": "v2"})
     enforce(tenant_id, True)
-    assert ask(tenant_id, operation="files/delete")["policy_version"] == 2
+    assert ask(ingest_token, operation="files/delete")["policy_version"] == 2
 
 
 # -- guardrails ------------------------------------------------------------------
@@ -128,7 +131,7 @@ def test_the_decision_reports_the_version_that_matched(tenant) -> None:
 @requires_stack
 def test_a_policy_with_no_conditions_is_refused(tenant) -> None:
     """A half-written deny would otherwise become a deny-everything."""
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     response = TestClient(app).put(
         f"/v1/policy?tenant_id={tenant_id}",
         json={"policy_id": "empty", "effect": "deny"}, headers=ADMIN,
@@ -139,7 +142,7 @@ def test_a_policy_with_no_conditions_is_refused(tenant) -> None:
 
 @requires_stack
 def test_a_malformed_policy_id_is_refused(tenant) -> None:
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     response = TestClient(app).put(
         f"/v1/policy?tenant_id={tenant_id}",
         json={"policy_id": "Not Valid!", "effect": "deny", "match_destructive": True},
@@ -152,7 +155,7 @@ def test_a_malformed_policy_id_is_refused(tenant) -> None:
 def test_only_an_admin_may_write_policy(tenant) -> None:
     """A read-only principal that could edit policy could disable the blocking
     it is subject to."""
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     client = TestClient(app)
     viewer = client.post(
         f"/v1/settings/read-tokens?tenant_id={tenant_id}",
@@ -178,11 +181,11 @@ def test_both_allows_and_denies_are_chained(tenant) -> None:
     permitted' from 'never evaluated'."""
     from abx_api.chain import row_to_event, verify_chain
 
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     put_policy(tenant_id, DESTRUCTIVE_POLICY)
     enforce(tenant_id, True)
-    ask(tenant_id, operation="files/delete")
-    ask(tenant_id, operation="tools/list")
+    ask(ingest_token, operation="files/delete")
+    ask(ingest_token, operation="tools/list")
 
     rows = ch_client().query(
         "SELECT op_name, op_outcome, resource_refs FROM events "
@@ -207,10 +210,10 @@ def test_both_allows_and_denies_are_chained(tenant) -> None:
 
 @requires_stack
 def test_an_advisory_decision_is_marked_as_advisory(tenant) -> None:
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     put_policy(tenant_id, DESTRUCTIVE_POLICY)
     enforce(tenant_id, False)
-    ask(tenant_id, operation="files/delete")
+    ask(ingest_token, operation="files/delete")
 
     refs = [
         ref for row in ch_client().query(
@@ -224,7 +227,7 @@ def test_an_advisory_decision_is_marked_as_advisory(tenant) -> None:
 
 @requires_stack
 def test_policy_edits_are_chained(tenant) -> None:
-    tenant_id, _ = tenant
+    tenant_id, ingest_token = tenant
     put_policy(tenant_id, DESTRUCTIVE_POLICY)
     rows = ch_client().query(
         "SELECT op_target FROM events WHERE tenant_id=%(t)s "
@@ -240,17 +243,72 @@ def test_a_decision_never_returns_an_error_status(tenant, monkeypatch) -> None:
     an agent. A failure is a decision, not a 500."""
     import abx_api.policy as policy_module
 
-    tenant_id, _ = tenant
+    _tenant_id, ingest_token = tenant
 
     def broken(*_args: object, **_kwargs: object):
         raise RuntimeError("policy store unreachable")
 
+    # Only the policy module's pool breaks; token auth resolves through
+    # abx_api.auth, so the request authenticates and then fails to evaluate.
     monkeypatch.setattr(policy_module, "pg_pool", broken)
     response = TestClient(app).post(
-        f"/v1/policy/decide?tenant_id={tenant_id}",
-        json={"agent_id": "bot", "operation": "files/delete"}, headers=ADMIN,
+        "/v1/policy/decide",
+        json={"agent_id": "bot", "operation": "files/delete"},
+        headers={"Authorization": f"Bearer {ingest_token}"},
     )
     assert response.status_code == 200
     body = response.json()
     assert body["allowed"] is True
     assert body["degraded"] is True
+
+
+# -- regressions found by the SP-0 route-guard inventory ------------------------
+
+@requires_stack
+def test_a_read_token_cannot_write_to_the_evidence_chain(tenant) -> None:
+    """Found by the step-0 inventory. `/decide` appends a decision event to the
+    tamper-evident chain, so a read-scoped principal able to call it could inject
+    attacker-shaped records into the store that chain verification and the
+    compliance exports attest to. The recording plane is fed only by write-only
+    ingest tokens (blueprint 6)."""
+    tenant_id, _ = tenant
+    client = TestClient(app)
+    for role in ("viewer", "auditor", "responder", "admin"):
+        token = client.post(
+            f"/v1/settings/read-tokens?tenant_id={tenant_id}",
+            json={"label": role, "role": role}, headers=ADMIN,
+        ).json()["token"]
+        response = client.post(
+            "/v1/policy/decide",
+            json={"agent_id": "bot", "operation": "files/delete"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 401, role
+
+    # The shared operator key is not an ingest token either.
+    assert client.post(
+        "/v1/policy/decide", json={"agent_id": "bot", "operation": "x"}, headers=ADMIN,
+    ).status_code == 401
+
+
+@requires_stack
+def test_the_decision_tenant_comes_from_the_token(tenant) -> None:
+    """A caller must not be able to name the tenant it writes into."""
+    tenant_id, ingest_token = tenant
+    with pg_pool().connection() as conn:
+        row = conn.execute(
+            "INSERT INTO tenants (name) VALUES ('policy-victim') RETURNING id"
+        ).fetchone()
+    other = str(row[0])
+
+    TestClient(app).post(
+        "/v1/policy/decide",
+        json={"agent_id": "bot", "operation": "files/delete", "tenant_id": other},
+        headers={"Authorization": f"Bearer {ingest_token}"},
+    )
+    from abx_api.store import ch_client
+
+    leaked = ch_client().query(
+        "SELECT count() FROM events WHERE tenant_id=%(t)s", parameters={"t": other},
+    ).result_rows
+    assert int(leaked[0][0]) == 0

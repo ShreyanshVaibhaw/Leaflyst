@@ -414,3 +414,45 @@ def test_reconnecting_your_own_project_still_works(tenant, monkeypatch) -> None:
             json={"project_id": project}, headers=ADMIN,
         )
         assert response.status_code == 200, response.text
+
+
+@requires_stack
+def test_a_viewer_cannot_mint_a_public_share_link(tenant) -> None:
+    """Found by the step-0 route-guard inventory. `POST .../share` mints a
+    DURABLE, UNAUTHENTICATED public URL serving full session detail - the
+    matching GET carries no guard because the token IS the credential. A viewer
+    able to call it could convert scoped, revocable, tenant-bound read access
+    into permanent public exposure.
+
+    The guard was hidden behind a module alias literally named `admin` that
+    expanded to `[Depends(require_read)]`, so the mutation read as correctly
+    guarded at every call site.
+    """
+    tenant_id, _ = tenant
+    client = TestClient(app)
+    session_id = f"share-{uuid.uuid4()}"
+
+    for role, expected in (("viewer", 403), ("auditor", 403)):
+        response = client.post(
+            f"/v1/replay/sessions/{session_id}/share?tenant_id={tenant_id}",
+            json={"expires_in_hours": 1}, headers=bearer(mint(tenant_id, role)),
+        )
+        assert response.status_code == expected, role
+
+    # A responder handles incidents, which is the documented purpose of sharing.
+    # Not 403: the capability is granted, so any failure is about the session.
+    assert client.post(
+        f"/v1/replay/sessions/{session_id}/share?tenant_id={tenant_id}",
+        json={"expires_in_hours": 1}, headers=bearer(mint(tenant_id, "responder")),
+    ).status_code != 403
+
+
+@requires_stack
+def test_no_replay_mutation_sits_behind_the_read_alias() -> None:
+    """The alias is now named for what it grants. This asserts the rename holds,
+    so the next reader cannot be misled the way the last one was."""
+    from abx_api import replay
+
+    source = __import__("inspect").getsource(replay)
+    assert "admin = [Depends(require_read)]" not in source
+    assert "read_only = [Depends(require_read)]" in source

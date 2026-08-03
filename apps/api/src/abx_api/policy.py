@@ -32,6 +32,7 @@ from abx_schemas import IngestEvent
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, StringConstraints
 
+from abx_api.auth import IngestIdentity, ingest_identity_from_token
 from abx_api.rbac import require_configure, require_read
 from abx_api.store import pg_pool
 
@@ -191,9 +192,24 @@ def upsert_policy(tenant_id: str, request: PolicyUpsert) -> PolicyView:
     )
 
 
-@router.post("/decide", response_model=DecisionView, dependencies=[Depends(require_read)])
-def decide_action(tenant_id: str, request: DecisionRequest) -> DecisionView:
-    """Evaluate one action. Never raises: a failure here is a decision, not a 500."""
+@router.post("/decide", response_model=DecisionView)
+def decide_action(
+    request: DecisionRequest,
+    identity: Annotated[IngestIdentity, Depends(ingest_identity_from_token)],
+) -> DecisionView:
+    """Evaluate one action. Never raises: a failure here is a decision, not a 500.
+
+    Authenticated by the WRITE-ONLY INGEST TOKEN, not a read token, because every
+    call appends a decision event to the tamper-evident chain. The recording
+    plane is fed only by write-only ingest tokens (blueprint 6); a read-scoped
+    principal able to append here could inject attacker-shaped records into the
+    evidence store that `/v1/chain/verify` and the compliance exports attest to.
+
+    Taking the tenant from the token rather than a query parameter is the same
+    rule that governs ingest: a caller must not be able to name the tenant it
+    writes into.
+    """
+    tenant_id = identity.tenant_id
     enforcement = False
     policies: list[Policy] = []
     decision: Decision
@@ -205,7 +221,7 @@ def decide_action(tenant_id: str, request: DecisionRequest) -> DecisionView:
             ).fetchone()
             enforcement = bool(setting[0]) if setting else False
             policies = _load(conn, tenant_id)
-    except Exception as exc:  # noqa: BLE001 - evaluation failure is a decision
+    except Exception as exc:
         logger.exception("policy evaluation failed for tenant %s", tenant_id)
         decision = on_evaluation_failure(policies, str(exc))
         _record(tenant_id, request, decision, enforcement)
@@ -282,5 +298,5 @@ def _record(
     })
     try:
         ingest_events(tenant_id, [event])
-    except Exception:  # noqa: BLE001 - the decision already stands
+    except Exception:
         logger.exception("policy decision was not chained for tenant %s", tenant_id)

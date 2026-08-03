@@ -19,7 +19,7 @@ RECEIVED: list[dict] = []
 
 
 class Handler(BaseHTTPRequestHandler):
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         body = self.rfile.read(int(self.headers["Content-Length"]))
         if MODE["value"] == "ok":
             RECEIVED.append(json.loads(body))
