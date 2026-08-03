@@ -109,14 +109,14 @@ def upload_findings(api_url: str, token: str, body: dict[str, Any]) -> dict[str,
         raise ValueError("scan uploads require HTTPS (HTTP is allowed only on loopback)")
     if parsed.username or parsed.password or not parsed.hostname:
         raise ValueError("invalid scan upload URL")
-    request = urllib.request.Request(
+    request = urllib.request.Request(  # noqa: S310 - operator-configured destination, never a caller-supplied URL
         f"{api_url.rstrip('/')}/v1/scans/local",
         method="POST",
         data=json.dumps(body).encode(),
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
     )
     opener = urllib.request.build_opener(_NoRedirect)
-    with opener.open(request, timeout=30) as response:  # noqa: S310
+    with opener.open(request, timeout=30) as response:
         return json.loads(response.read())  # type: ignore[no-any-return]
 
 

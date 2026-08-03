@@ -77,16 +77,17 @@ def read_env_file(path: Path) -> dict[str, str]:
 
 
 def wait_ready(base_url: str, timeout: int = 90) -> None:
+    last_error: Exception | None = None
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
             status, body = request(base_url, "/readyz")
             if status == 200 and json.loads(body)["status"] == "ready":
                 return
-        except Exception:
-            pass
+        except Exception as exc:  # any failure means not ready yet
+            last_error = exc
         time.sleep(2)
-    raise RuntimeError("restored API did not become ready")
+    raise RuntimeError(f"restored API did not become ready: {last_error}")
 
 
 def archive_volumes(directory: Path, env: dict[str, str]) -> None:

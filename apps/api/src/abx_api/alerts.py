@@ -271,7 +271,7 @@ def _facts(tenant_id: str, event: dict[str, Any]) -> EventFacts:
     try:
         baseline = build_baseline(tenant_id, event["agent_id"], event["session_id"])
         observation = observation_of(event)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("behavioural baseline unavailable for tenant %s", tenant_id)
 
     return EventFacts(
@@ -303,7 +303,7 @@ def _payload_body(event: dict[str, Any]) -> str | None:
         return None
     try:
         body = get_payload(ref)
-    except Exception:  # noqa: BLE001 - analysis degrades, alerting continues
+    except Exception:
         return None
     return body.decode("utf-8", errors="replace") if body else None
 

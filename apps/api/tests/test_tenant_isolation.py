@@ -56,7 +56,7 @@ def _delete_tenant(tenant_id: str) -> None:
             "chain_heads",
             "tenant_settings",
         ):
-            conn.execute(f"DELETE FROM {table} WHERE tenant_id=%s", (tenant_id,))  # noqa: S608
+            conn.execute(f"DELETE FROM {table} WHERE tenant_id=%s", (tenant_id,))
         conn.execute("DELETE FROM tenants WHERE id=%s", (tenant_id,))
 
 

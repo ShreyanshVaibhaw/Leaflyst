@@ -63,7 +63,7 @@ def _append_only_event_store() -> ControlResult:
     """
     try:
         ch_client().command("ALTER TABLE events DELETE WHERE 1 = 0")
-    except Exception as exc:  # noqa: BLE001 - refusal is the passing outcome
+    except Exception as exc:
         return ControlResult(
             True,
             "the event store refused a mutation attempt by the application user",
@@ -310,7 +310,7 @@ def collect() -> dict[str, Any]:
             continue
         try:
             result = control.check()
-        except Exception as exc:  # noqa: BLE001 - an erroring check is a failing check
+        except Exception as exc:
             automated.append({
                 **entry, "passed": False,
                 "detail": f"the control check could not be completed: {exc}",

@@ -43,7 +43,7 @@ from abx_api.identifiers import is_uuid
 from abx_api.settings import settings
 from abx_api.store import pg_pool
 
-READ_TOKEN_PREFIX = "abx_read_"
+READ_TOKEN_PREFIX = "abx_read_"  # noqa: S105 - a token prefix, not a token
 
 
 class Capability(StrEnum):

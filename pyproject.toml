@@ -35,9 +35,31 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+# "S" is flake8-bandit. It is blocking rather than advisory so that a new
+# subprocess call, URL fetch, or string-built query has to be argued for in a
+# noqa with a reason, instead of arriving unnoticed in a large diff.
+# RUF100 flags a noqa that no longer suppresses anything, so a suppression
+# cannot outlive the code it was written for and quietly cover something else.
+select = ["E", "F", "I", "UP", "B", "SIM", "S", "RUF100"]
+# S101 flags every assert, on the grounds that `python -O` strips them. This
+# codebase uses assert as a narrowing statement after a query that cannot
+# return None, which is a typing concern rather than a security one, and
+# nothing here is run with -O. The rules that carry actual security signal
+# (subprocess, URL fetch, string-built SQL, hardcoded secrets, swallowed
+# exceptions) all stay blocking.
+ignore = ["S101"]
 # Generated code is exempt; never hand-edit it anyway.
 exclude = ["packages/schemas/src/abx_schemas/generated/*"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test trees carry synthetic credentials and build throwaway queries on purpose.
+"**/tests/**" = ["S105", "S106", "S108", "S310", "S603", "S607", "S608"]
+"**/conftest.py" = ["S105", "S106", "S608"]
+# Local smoke and release scripts drive real tools by name; they are developer
+# entry points, never a request path.
+"demo/**" = ["S310", "S603", "S607"]
+"tools/**" = ["S310", "S603", "S607"]
+"packages/schemas/scripts/**" = ["S310", "S603", "S607"]
 
 [tool.mypy]
 python_version = "3.12"

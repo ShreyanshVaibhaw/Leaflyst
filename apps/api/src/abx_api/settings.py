@@ -205,7 +205,7 @@ def _keyring_errors(value: Settings) -> list[str]:
         try:
             if len(base64.b64decode(encoded.strip(), validate=True)) != 32:
                 errors.append(f"{name} key '{key_id}' must decode to 32 bytes")
-        except Exception:  # noqa: BLE001 - any decode failure is a config error
+        except Exception:
             errors.append(f"{name} key '{key_id}' must be valid base64")
     return errors
 
@@ -220,7 +220,7 @@ def production_config_errors(value: Settings) -> list[str]:
     if value.admin_key == "dev-admin-key" or len(value.admin_key) < 32:
         errors.append("ABX_ADMIN_KEY must be a strong non-default value")
     if (
-        value.github_state_secret == "dev-github-state-secret"
+        value.github_state_secret == "dev-github-state-secret"  # noqa: S105 - rejects it
         or len(value.github_state_secret) < 32
     ):
         errors.append("ABX_GITHUB_STATE_SECRET must be a strong non-default value")

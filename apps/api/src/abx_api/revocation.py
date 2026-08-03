@@ -97,7 +97,7 @@ class GitHubRevokeAdapter:
             method, body = "DELETE", None
         else:
             raise ValueError("unsupported GitHub credential kind")
-        request = urllib.request.Request(  # noqa: S310 - fixed GitHub HTTPS root
+        request = urllib.request.Request(
             "https://api.github.com" + path, method=method,
             data=json.dumps(body).encode() if body else None,
             headers={

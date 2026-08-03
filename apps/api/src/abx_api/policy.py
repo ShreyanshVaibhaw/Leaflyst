@@ -221,7 +221,7 @@ def decide_action(
             ).fetchone()
             enforcement = bool(setting[0]) if setting else False
             policies = _load(conn, tenant_id)
-    except Exception as exc:  # noqa: BLE001 - evaluation failure is a decision
+    except Exception as exc:
         logger.exception("policy evaluation failed for tenant %s", tenant_id)
         decision = on_evaluation_failure(policies, str(exc))
         _record(tenant_id, request, decision, enforcement)
@@ -298,5 +298,5 @@ def _record(
     })
     try:
         ingest_events(tenant_id, [event])
-    except Exception:  # noqa: BLE001 - the decision already stands
+    except Exception:
         logger.exception("policy decision was not chained for tenant %s", tenant_id)

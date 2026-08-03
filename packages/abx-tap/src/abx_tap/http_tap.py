@@ -99,7 +99,7 @@ class _Handler(BaseHTTPRequestHandler):
         with contextlib.suppress(queue.Full):
             self.observe.put_nowait(ObservedLine(direction, raw))
 
-    def do_POST(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
+    def do_POST(self) -> None:
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length) if length else b""
         headers = {key: value for key, value in self.headers.items()}
@@ -114,7 +114,7 @@ class _Handler(BaseHTTPRequestHandler):
         if request_refs:
             self._observe(CLIENT_TO_SERVER, _synthetic(body, request_refs))
 
-        request = urllib.request.Request(
+        request = urllib.request.Request(  # noqa: S310 - operator-configured destination, never a caller-supplied URL
             self.upstream, data=body, headers=_forwardable(headers), method="POST"
         )
         try:
@@ -125,7 +125,7 @@ class _Handler(BaseHTTPRequestHandler):
         except urllib.error.HTTPError as error:
             # An error response is a real response; forward it verbatim.
             self._relay(error, body)
-        except Exception:  # noqa: BLE001 - the agent must get an answer
+        except Exception:
             self._incomplete(body, "upstream_unreachable")
 
     def _relay(self, response: Any, request_body: bytes) -> None:
@@ -147,7 +147,7 @@ class _Handler(BaseHTTPRequestHandler):
                 self.wfile.flush()
                 streamed += len(chunk)
                 self._observe(SERVER_TO_CLIENT, chunk)
-        except Exception:  # noqa: BLE001
+        except Exception:
             broke = True
 
         # 2026-07-28 removed SSE resumability, so a broken stream loses the

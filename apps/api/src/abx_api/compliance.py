@@ -244,7 +244,7 @@ def _record_attestation(tenant_id: str, body: dict[str, Any]) -> None:
     })
     try:
         ingest_events(tenant_id, [event])
-    except Exception:  # noqa: BLE001 - recording degrades, the pack still stands
+    except Exception:
         return
 
 

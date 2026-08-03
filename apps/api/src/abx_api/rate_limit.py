@@ -131,7 +131,9 @@ class RateLimit:
         try:
             bucket = int(time.time()) // max(1, settings.rate_limit_window_seconds)
             decision = check(scope, bucket)
-        except Exception:  # noqa: BLE001 - see the failure-mode note in the module docstring
+        except Exception:
+            # Any limiter failure allows the request; see the failure-mode
+            # note in the module docstring.
             await self.app(scope, receive, send)
             return
         if decision.allowed:
