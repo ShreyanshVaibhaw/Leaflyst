@@ -5,19 +5,30 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege by default. A workflow token that can write to the repository
+# is a supply-chain credential, and every step here only needs to read the code.
+# No job widens this, and none reads a secret, so a pull request from a fork gets
+# the same token as any other run and can neither publish nor tamper.
+permissions:
+  contents: read
+
+# Every action is pinned to a full commit SHA with its release in a comment. A
+# tag is a mutable pointer: whoever can move it can run their code with this
+# workflow's token, which is the whole shape of the tj-actions/changed-files
+# compromise. The comment is there so the pin stays legible to a human reviewer.
 jobs:
   python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           python-version: "3.12"
       # pnpm + node are needed by the codegen drift check (TS generation)
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
       - run: uv sync --all-packages
@@ -29,8 +40,26 @@ jobs:
         run: uv run python packages/schemas/scripts/codegen.py --check
       - name: API contract drift check
         run: uv run python packages/schemas/scripts/api_contracts.py --check
+      # Without these services the integration tests skip, and a run that skips
+      # 173 of 436 tests reports the same green as one that passes them. The
+      # dev compose file is reused rather than restated so the services cannot
+      # drift away from what developers run against.
+      - name: Start the data stack
+        run: |
+          docker compose -f infra/docker-compose.dev.yml up -d --wait
+          uv run python infra/migrate.py
+      # ABX_REQUIRE_STACK turns "stack missing" from a skip into a failure, so a
+      # broken service container surfaces as a red run instead of a quiet one.
       - name: Tests
-        run: uv run pytest -q
+        env:
+          ABX_REQUIRE_STACK: "1"
+        run: uv run pytest -q -rs
+      - name: Stack logs
+        if: failure()
+        run: docker compose -f infra/docker-compose.dev.yml logs
+      - name: Stop the data stack
+        if: always()
+        run: docker compose -f infra/docker-compose.dev.yml down --volumes
 
   web:
     runs-on: ubuntu-latest
@@ -38,11 +67,11 @@ jobs:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
         with:
           version: 10
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: pnpm
@@ -67,12 +96,12 @@ jobs:
   supply-chain:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # Secret scanning is worthless against the tip alone: a credential
           # that was committed and then deleted is still published.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
         with:
           python-version: "3.12"
       - name: Python dependency audit
@@ -94,8 +123,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [python, web]
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Build Python release image
         run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/python.Dockerfile -t leaflyst-python:release-smoke .
       - name: Build web release image
@@ -123,15 +152,36 @@ jobs:
         run: python demo/container_smoke.py --skip-build
       - name: Install Syft
         id: syft
-        uses: anchore/sbom-action/download-syft@v0
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           syft-version: v1.45.1
       - name: Generate and verify release provenance
         run: |
           python tools/release_manifest.py --output release-artifacts --require-clean --syft "${{ steps.syft.outputs.cmd }}"
           python tools/release_manifest.py --verify release-artifacts/release-manifest.json
+      # A verifier that has never been seen to fail is not evidence of anything.
+      # One injected package into a copy of the SBOM must break verification, or
+      # the provenance above is decoration.
+      - name: Prove the provenance check detects tampering
+        run: |
+          cp -r release-artifacts /tmp/tampered
+          python - <<'PY'
+          from pathlib import Path
+          sbom = Path("/tmp/tampered/python.cdx.json")
+          text = sbom.read_text(encoding="utf-8")
+          marker = '"components":['
+          assert marker in text, "unexpected SBOM shape"
+          sbom.write_text(
+              text.replace(marker, marker + '{"type":"library","name":"not-really-here","version":"1.0.0"},', 1),
+              encoding="utf-8",
+          )
+          PY
+          if python tools/release_manifest.py --verify /tmp/tampered/release-manifest.json; then
+            echo "tampered SBOM verified as valid; the provenance check is not working" >&2
+            exit 1
+          fi
       - name: Retain release manifest and SBOMs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-provenance-${{ github.sha }}
           path: release-artifacts

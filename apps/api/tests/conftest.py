@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Iterator
 
@@ -20,7 +21,20 @@ def _stack_up() -> bool:
         return False
 
 
-requires_stack = pytest.mark.skipif(not _stack_up(), reason="dev stack not running")
+_STACK_UP = _stack_up()
+
+# Skipping is right on a laptop with nothing running and wrong anywhere the
+# stack is supposed to be up. Without this, a CI run that skipped 173 of 436
+# tests reported exactly the same green as one that passed them, and a service
+# container that failed to start would have looked like a clean build. Setting
+# ABX_REQUIRE_STACK makes that a failure instead of silence.
+if os.environ.get("ABX_REQUIRE_STACK") and not _STACK_UP:
+    raise RuntimeError(
+        "ABX_REQUIRE_STACK is set but the data stack is unreachable; "
+        "integration tests would have skipped silently"
+    )
+
+requires_stack = pytest.mark.skipif(not _STACK_UP, reason="dev stack not running")
 
 
 def _delete_tenant_data(conn, tenant_id: str) -> None:
@@ -57,7 +71,7 @@ def _delete_tenant_data(conn, tenant_id: str) -> None:
         "tenant_members",
         "tenant_settings",
     ):
-        conn.execute(f"DELETE FROM {table} WHERE tenant_id = %s", (tenant_id,))  # noqa: S608
+        conn.execute(f"DELETE FROM {table} WHERE tenant_id = %s", (tenant_id,))
 
 
 @pytest.fixture(autouse=True, scope="session")
