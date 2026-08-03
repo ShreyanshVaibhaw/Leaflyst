@@ -103,7 +103,7 @@ Default workflow token permissions are read-only, and workflows may not approve 
 
 Actions are restricted to an allowlist: GitHub-owned actions, plus exactly these third-party patterns and nothing else.
 
-```
+```text
 astral-sh/setup-uv@*
 pnpm/action-setup@*
 docker/setup-buildx-action@*
