@@ -104,21 +104,25 @@ Default workflow token permissions are read-only, and workflows may not approve 
 Actions are restricted to an allowlist: GitHub-owned actions, plus exactly these third-party patterns and nothing else.
 
 ```text
-astral-sh/setup-uv@*
-pnpm/action-setup@*
-docker/setup-buildx-action@*
-anchore/sbom-action@*
-anchore/sbom-action/*@*
+astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9
+pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86
+docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c
+anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610
 ```
 
-The last pattern is not redundant. `anchore/sbom-action/download-syft` is an action in a subdirectory, and `anchore/sbom-action@*` does not match it; without the subpath pattern the workflow is refused before any job starts.
+Each entry names one commit, so the allowlist constrains which revision runs rather than only which repository it comes from.
+
+The subpath entry is spelled out in full because `anchore/sbom-action` does not match `anchore/sbom-action/download-syft`; the parent pattern alone gets the workflow refused before any job starts.
 
 SHA pinning is enforced at the platform level, so a workflow referencing an action by mutable tag is refused before it runs rather than caught in review.
 That makes the pinning discipline a property of the repository instead of a convention someone has to remember.
 
-The residual gap is deliberate and worth naming: the `@*` suffix admits *any* revision of those four repositories, so platform enforcement guarantees a commit SHA is used without constraining which one.
-An upstream account compromise followed by a workflow edit to the malicious SHA would still be permitted.
-Pinning each allowlist entry to the exact SHA in `ci.yml` would close that, at the cost of every action upgrade becoming a two-place change that fails at dispatch if either place is forgotten.
+Both halves were verified against a real dispatch rather than inferred from the settings page.
+A throwaway branch running every one of these actions at the pinned SHAs completed normally; the same workflow with `astral-sh/setup-uv` swapped to a different legitimate revision of the same action was refused with `startup_failure` before any job began.
+Accepting a pattern at write time and matching it at dispatch are different things, and only the second one is a control.
+
+The cost is real and worth stating: upgrading an action is now a two-place change, the workflow and the allowlist, and forgetting either one fails at dispatch rather than in review.
+That failure is loud, which is the intended trade.
 
 Adding a new third-party action is a two-part change: the workflow edit, and an allowlist entry.
 GitHub-owned actions need only the workflow edit, since they are permitted as a class.
