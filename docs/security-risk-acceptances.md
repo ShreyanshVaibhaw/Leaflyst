@@ -90,19 +90,38 @@ Branches must be up to date with the base before merging, so a pull request cann
 
 The bypass actor on `protect-main` is the repository admin role, scoped to `pull_request` rather than `always`.
 This is deliberate and load-bearing.
-A pull-request-scoped bypass can only be exercised by merging a pull request, and no pull request merge can force-push or delete a branch, so history rewriting stays closed to everyone while an emergency merge past a red check stays possible and leaves a durable record.
+A pull-request-scoped bypass can only be exercised by merging a pull request, and merging a pull request cannot force-push or delete the protected base branch, so rewriting the history of `main` stays closed to everyone while an emergency merge past a red check stays possible and leaves a durable record.
+
+Two limits on that guarantee, stated so the sentence above is not read more broadly than it holds.
+Merging still deletes the pull request's own head branch when automatic head-branch deletion is on, because a topic branch is not a protected ref.
+And the guarantee holds only while the ruleset is active: an actor with the Administration permission can edit or disable it, which is precisely why the day-to-day token is being narrowed to exclude that permission.
 The alternative, an empty bypass list, sounds stronger but is weaker in practice: bypass is per-ruleset rather than per-rule, so the only emergency lever would be disabling the whole ruleset, dropping force-push protection and every required check at once.
 
 ### Actions policy
 
 Default workflow token permissions are read-only, and workflows may not approve pull requests.
 
-Actions are restricted to an allowlist: GitHub-owned actions plus the four third-party actions this repository actually uses.
+Actions are restricted to an allowlist: GitHub-owned actions, plus exactly these third-party patterns and nothing else.
+
+```
+astral-sh/setup-uv@*
+pnpm/action-setup@*
+docker/setup-buildx-action@*
+anchore/sbom-action@*
+anchore/sbom-action/*@*
+```
+
+The last pattern is not redundant. `anchore/sbom-action/download-syft` is an action in a subdirectory, and `anchore/sbom-action@*` does not match it; without the subpath pattern the workflow is refused before any job starts.
+
 SHA pinning is enforced at the platform level, so a workflow referencing an action by mutable tag is refused before it runs rather than caught in review.
 That makes the pinning discipline a property of the repository instead of a convention someone has to remember.
 
-Adding a new action is therefore a two-part change: the workflow edit, and an allowlist entry.
-That friction is the point.
+The residual gap is deliberate and worth naming: the `@*` suffix admits *any* revision of those four repositories, so platform enforcement guarantees a commit SHA is used without constraining which one.
+An upstream account compromise followed by a workflow edit to the malicious SHA would still be permitted.
+Pinning each allowlist entry to the exact SHA in `ci.yml` would close that, at the cost of every action upgrade becoming a two-place change that fails at dispatch if either place is forgotten.
+
+Adding a new third-party action is a two-part change: the workflow edit, and an allowlist entry.
+GitHub-owned actions need only the workflow edit, since they are permitted as a class.
 
 ### What these controls do not cover
 
