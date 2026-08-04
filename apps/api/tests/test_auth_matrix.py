@@ -309,14 +309,80 @@ def test_a_scan_upload_token_opens_nothing_else(entry: str, two_tenants) -> None
     assert response.status_code == 401, (entry, response.status_code, response.text[:200])
 
 
+SCAN_UPLOAD_BODY = {
+    "scope": "123456789012",
+    "api_calls": 1,
+    "findings": [
+        {
+            "natural_key": "aws:overpriv:AKIA-MATRIX",
+            "finding_type": "over_privileged",
+            "severity": "critical",
+            "fingerprint": "AKIA-MATRIX",
+            "owner": "arn:aws:iam::123456789012:user/matrix-bot",
+            "evidence": {
+                "reach_count": 1,
+                "reachable_resources": ["aws:*:*"],
+                "destructive_actions": ["*"],
+                "grants": [{
+                    "action": "*", "resource": "aws:*:*", "kind": "all",
+                    "environment": "unknown", "access": "admin",
+                }],
+            },
+            "remediation": "Replace wildcard administration with least privilege.",
+        }
+    ],
+}
+
+
 @requires_stack
-@pytest.mark.parametrize("entry", SCAN_ROUTES)
-def test_a_scan_upload_token_is_bound_to_its_own_tenant(entry: str, two_tenants) -> None:
-    """Tenant comes from the token, so naming another tenant must not redirect it."""
-    client = TestClient(app, raise_server_exceptions=False)
-    a, b = two_tenants["a"], two_tenants["b"]
-    response = send(
-        client, entry, b["tenant_id"], {"Authorization": f"Bearer {a['scan']}"}
+def test_a_scan_upload_token_does_open_its_own_route(two_tenants) -> None:
+    """The positive case, without which the three rejection tests prove nothing.
+
+    A regression that answered 401 for every scan token - the route broken
+    outright - would satisfy every assertion above. Only a success here
+    distinguishes "correctly refuses the wrong credentials" from "refuses
+    everything".
+    """
+    tenant = two_tenants["a"]
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/v1/scans/local",
+        json=SCAN_UPLOAD_BODY,
+        headers={"Authorization": f"Bearer {tenant['scan']}"},
     )
-    assert response.status_code < 500, (entry, response.status_code)
+    assert response.status_code == 200, response.text
+
+
+@requires_stack
+def test_a_scan_upload_lands_in_the_tokens_tenant_not_the_named_one(two_tenants) -> None:
+    """Checking the status code is not checking the isolation.
+
+    The handler takes its tenant from the token rather than the request, so the
+    property that matters is where the rows landed. A response that looks
+    correct while writing into tenant B is exactly the bug this guards, and no
+    assertion on status or body text would notice it.
+    """
+    a, b = two_tenants["a"], two_tenants["b"]
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/v1/scans/local",
+        params={"tenant_id": b["tenant_id"]},
+        json=SCAN_UPLOAD_BODY,
+        headers={"Authorization": f"Bearer {a['scan']}"},
+    )
+    assert response.status_code == 200, response.text
     assert b["tenant_id"] not in response.text
+
+    with psycopg.connect(settings.pg_dsn, autocommit=True) as conn:
+        mine = conn.execute(
+            "SELECT count(*) FROM findings WHERE tenant_id = %s AND natural_key = %s",
+            (a["tenant_id"], "aws:overpriv:AKIA-MATRIX"),
+        ).fetchone()
+        theirs = conn.execute(
+            "SELECT count(*) FROM findings WHERE tenant_id = %s AND natural_key = %s",
+            (b["tenant_id"], "aws:overpriv:AKIA-MATRIX"),
+        ).fetchone()
+        runs = conn.execute(
+            "SELECT count(*) FROM scan_runs WHERE tenant_id = %s", (b["tenant_id"],)
+        ).fetchone()
+    assert mine is not None and mine[0] >= 1, "the upload did not land in the token's tenant"
+    assert theirs is not None and theirs[0] == 0, "the named tenant received the findings"
+    assert runs is not None and runs[0] == 0, "the named tenant received a scan run"
