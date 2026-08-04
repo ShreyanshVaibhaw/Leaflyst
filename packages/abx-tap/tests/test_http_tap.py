@@ -19,10 +19,12 @@ import threading
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from types import SimpleNamespace
+from urllib.request import build_opener
 
 import pytest
 from abx_tap import mcp_spec
-from abx_tap.http_tap import auth_refs, serve
+from abx_tap.http_tap import _NoRedirect, auth_refs, plaintext_offsite, serve
 from abx_tap.observer import Observer
 
 # header.{"iss":"https://auth.example.com","aud":"https://mcp.example.com"}.sig
@@ -260,3 +262,196 @@ def test_unreachable_upstream_answers_the_agent_and_records_the_failure() -> Non
 def test_upstream_must_be_an_http_url() -> None:
     with pytest.raises(ValueError):
         serve("ftp://example.com", queue.Queue(), port=0)
+
+
+# -- the transport under the token is part of the token's security -------------
+
+@pytest.mark.parametrize("upstream", [
+    "http://mcp.example.com/mcp",
+    "http://10.0.0.5/mcp",
+    "http://169.254.169.254/latest/meta-data/",  # metadata services are http only
+    "http://[2001:db8::1]/mcp",
+    "http://LOCALHOST.evil.example.com/mcp",     # not the loopback name
+])
+def test_a_plaintext_offsite_upstream_is_refused(upstream: str) -> None:
+    """The tap forwards Authorization verbatim, so plain http would put the
+    agent's bearer token on the wire in the clear."""
+    with pytest.raises(ValueError, match="https"):
+        serve(upstream, queue.Queue(), port=0)
+
+
+@pytest.mark.parametrize("upstream", [
+    "https://mcp.example.com/mcp",
+    "http://127.0.0.1:8931/mcp",
+    "http://localhost:8931/mcp",
+    "http://[::1]:8931/mcp",
+])
+def test_https_anywhere_and_plain_http_to_loopback_are_allowed(upstream: str) -> None:
+    """Loopback plaintext stays usable: the bytes never reach a network, and
+    refusing it would mean a TLS certificate to run the test suite."""
+    assert plaintext_offsite(upstream) is False
+
+
+def test_the_refusal_is_about_transport_not_the_hostname() -> None:
+    """The negative control. If this returned True for https it would be
+    rejecting hosts rather than plaintext, and the allowance above would be
+    passing for the wrong reason."""
+    assert plaintext_offsite("https://169.254.169.254/mcp") is False
+    assert plaintext_offsite("http://169.254.169.254/mcp") is True
+
+
+# -- the bearer token does not travel to a redirect target (SP-6b) -------------
+
+def _drain_request_body(handler: BaseHTTPRequestHandler) -> None:
+    """Consume the request body before replying.
+
+    A handler that answers and closes without reading leaves the client writing
+    into a socket nobody is draining, which surfaces as a connection reset
+    rather than as the response - and the tap reports that as an unreachable
+    upstream. Real servers read their input; these must too, or the test is
+    racing the socket instead of testing the proxy.
+    """
+    length = int(handler.headers.get("Content-Length") or 0)
+    if length:
+        handler.rfile.read(length)
+
+
+class _Harvester(BaseHTTPRequestHandler):
+    """Stands in for wherever a Location header points."""
+
+    seen: list[str] = []
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *_args: object) -> None:
+        pass
+
+    def _answer(self) -> None:
+        _drain_request_body(self)
+        _Harvester.seen.append(self.headers.get("Authorization") or "<none>")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", "2")
+        self.end_headers()
+        self.wfile.write(b"{}")
+
+    do_GET = _answer
+    do_POST = _answer
+
+
+@pytest.fixture
+def redirecting_upstream():
+    """An upstream whose only answer is 'go ask that other host instead'."""
+    _Harvester.seen = []
+    harvester = ThreadingHTTPServer(("127.0.0.1", 0), _Harvester)
+    threading.Thread(target=harvester.serve_forever, daemon=True).start()
+    elsewhere = f"http://127.0.0.1:{harvester.server_address[1]}/collect"
+
+    class _Redirector(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, *_args: object) -> None:
+            pass
+
+        def do_POST(self) -> None:
+            _drain_request_body(self)
+            self.send_response(302)
+            self.send_header("Location", elsewhere)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+    upstream = ThreadingHTTPServer(("127.0.0.1", 0), _Redirector)
+    threading.Thread(target=upstream.serve_forever, daemon=True).start()
+
+    upstream_url = f"http://127.0.0.1:{upstream.server_address[1]}/mcp"
+    observe: queue.Queue = queue.Queue(maxsize=1000)
+    tap_server, _thread = serve(upstream_url, observe, port=0)
+    yield SimpleNamespace(
+        tap=f"http://127.0.0.1:{tap_server.server_address[1]}/mcp",
+        observe=observe,
+        elsewhere=elsewhere,
+        upstream=upstream_url,
+    )
+    tap_server.shutdown()
+    upstream.shutdown()
+    harvester.shutdown()
+
+
+def post_without_following(url: str, body: dict, headers: dict[str, str]) -> int:
+    """POST with a client that does NOT follow redirects.
+
+    The helper above uses a stock opener, which follows a 302 and carries
+    Authorization with it. That would put the token on the harvester by the test
+    client's own doing and prove nothing about the tap.
+    """
+    request = urllib.request.Request(
+        url, data=json.dumps(body).encode(), method="POST",
+        headers={"Content-Type": "application/json", **headers},
+    )
+    try:
+        with build_opener(_NoRedirect).open(request, timeout=10) as response:
+            return int(response.status)
+    except urllib.error.HTTPError as error:
+        return int(error.code)
+
+
+def test_a_redirect_does_not_carry_the_bearer_token_to_another_host(
+    redirecting_upstream,
+) -> None:
+    """The tap must not fetch a Location target with the agent's credential.
+
+    urllib re-sends request headers to a redirect target, Authorization
+    included, and across hosts - where `requests` would strip it. A proxy that
+    follows redirects therefore hands the token to whatever host the upstream
+    names: an attacker's, or an internal address like the metadata service. The
+    agent sees 200 and nothing looks wrong.
+
+    The 3xx is relayed rather than converted to an error. Without the tap in the
+    path the client would receive that same 302 from the upstream directly, so
+    relaying keeps the observable behaviour identical - which is the whole point
+    of a byte-faithful proxy. What must not happen is the tap ADDING a hop the
+    operator never configured and cannot see.
+    """
+    secret = "Bearer ghp_" + "z" * 36
+    status = post_without_following(
+        redirecting_upstream.tap,
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/call"},
+        {"Authorization": secret},
+    )
+
+    assert _Harvester.seen == [], "the tap carried the bearer token to the redirect target"
+    assert status == 302, f"the redirect was not passed through (got {status})"
+
+
+def test_the_refused_redirect_is_visible_on_the_record(redirecting_upstream) -> None:
+    """An upstream redirecting a credential-bearing call is worth seeing."""
+    post_without_following(
+        redirecting_upstream.tap,
+        {"jsonrpc": "2.0", "id": 1, "method": "tools/call"},
+        {"Authorization": "Bearer ghp_" + "z" * 36},
+    )
+    refs = refs_from(redirecting_upstream.observe)
+    assert "abx:mcp-upstream-redirect-not-followed:true" in refs
+    assert any(redirecting_upstream.elsewhere in ref for ref in refs), refs
+
+
+def test_the_leak_is_real_without_the_handler(redirecting_upstream) -> None:
+    """The negative control the SP-6 gate's rule asks for.
+
+    "The harvester saw nothing" would also be true if the request never left the
+    building. So this drives the SAME redirect through a stock urllib opener -
+    exactly what the tap used before this fix - and shows the token arriving at
+    the other host. If this test ever stops leaking, the test above has stopped
+    measuring anything.
+    """
+    secret = "Bearer ghp_" + "y" * 36
+    request = urllib.request.Request(
+        redirecting_upstream.upstream, data=b"{}", method="POST",
+        headers={"Content-Type": "application/json", "Authorization": secret},
+    )
+    with contextlib.suppress(urllib.error.HTTPError, urllib.error.URLError):
+        urllib.request.urlopen(request, timeout=10).read()
+
+    assert _Harvester.seen == [secret], (
+        "a default opener no longer forwards Authorization across a redirect, "
+        "so the containment test above proves nothing"
+    )

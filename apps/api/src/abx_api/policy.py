@@ -177,6 +177,12 @@ def upsert_policy(tenant_id: str, request: PolicyUpsert) -> PolicyView:
         ).fetchone()
     assert row is not None
 
+    # Any write re-opens the question of whether this tenant is fail-closed.
+    # Dropping rather than recomputing keeps the bias toward allow: the next
+    # successful evaluation re-learns it, and until then a policy that was just
+    # turned off cannot keep denying from a stale entry.
+    _FAIL_CLOSED_SEEN.pop(tenant_id, None)
+
     from abx_api.admin_audit import record_admin_action
 
     record_admin_action(
@@ -221,27 +227,78 @@ def decide_action(
             ).fetchone()
             enforcement = bool(setting[0]) if setting else False
             policies = _load(conn, tenant_id)
+        _remember_fail_closed(tenant_id, policies, enforcement)
     except Exception as exc:
         logger.exception("policy evaluation failed for tenant %s", tenant_id)
-        decision = on_evaluation_failure(policies, str(exc))
+        decision = _degraded_decision(tenant_id, str(exc))
         _record(tenant_id, request, decision, enforcement)
         return _view(decision, enforcement)
 
-    if not enforcement:
-        # Evaluated and recorded, but advisory: a tenant that has not opted in
-        # sees what a policy WOULD have done without anything being blocked.
+    # decide() is inside the guard too. It is pure today, but this endpoint sits
+    # in the agent's request path, and the promise is that a failure here is a
+    # decision rather than a 500 - a promise that only holds if the evaluation
+    # itself is covered, not just the load before it.
+    try:
         decision = decide(policies, _request_of(request))
-        decision = Decision(
-            Effect.ALLOW, decision.policy_id, decision.policy_version,
-            f"enforcement is disabled for this tenant (would have been "
-            f"{decision.effect.value}: {decision.reason})",
-            evaluated=decision.evaluated,
-        )
-    else:
-        decision = decide(policies, _request_of(request))
+        if not enforcement:
+            # Evaluated and recorded, but advisory: a tenant that has not opted
+            # in sees what a policy WOULD have done without anything blocked.
+            decision = Decision(
+                Effect.ALLOW, decision.policy_id, decision.policy_version,
+                f"enforcement is disabled for this tenant (would have been "
+                f"{decision.effect.value}: {decision.reason})",
+                evaluated=decision.evaluated,
+            )
+    except Exception as exc:
+        logger.exception("policy evaluation raised for tenant %s", tenant_id)
+        decision = on_evaluation_failure(policies, str(exc))
 
     _record(tenant_id, request, decision, enforcement)
     return _view(decision, enforcement)
+
+
+#: Tenants last observed with an enabled, enforced, fail-closed policy.
+#:
+#: `on_evaluation_failure` picks the fail-closed policies out of the list it is
+#: given, and that list comes from the policy store. So in the one failure the
+#: opt-in exists for - the store being unreachable - the list is empty and a
+#: tenant who asked to be denied gets allowed instead. The opt-in lived in the
+#: thing that died.
+#:
+#: Remembering it per process closes that. Two deliberate biases, both toward
+#: allow, because the product's failure mode is "the agent keeps working":
+#:
+#:   - a process that has never successfully evaluated for a tenant has not
+#:     learned their opt-in and allows; and
+#:   - any policy write drops the entry, so a fail-closed policy that was just
+#:     disabled cannot keep denying from cache. Turning a policy off must never
+#:     make the system stricter.
+_FAIL_CLOSED_SEEN: dict[str, tuple[str, int]] = {}
+
+
+def _remember_fail_closed(
+    tenant_id: str, policies: list[Policy], enforcement: bool
+) -> None:
+    closed = next(
+        (p for p in policies if p.enabled and p.on_error is OnError.DENY), None
+    )
+    if enforcement and closed is not None:
+        _FAIL_CLOSED_SEEN[tenant_id] = (closed.policy_id, closed.version)
+    else:
+        _FAIL_CLOSED_SEEN.pop(tenant_id, None)
+
+
+def _degraded_decision(tenant_id: str, detail: str) -> Decision:
+    """The decision when the policy store itself could not be reached."""
+    remembered = _FAIL_CLOSED_SEEN.get(tenant_id)
+    if remembered is None:
+        return on_evaluation_failure([], detail)
+    policy_id, version = remembered
+    return Decision(
+        Effect.DENY, policy_id, version,
+        f"policy store unreachable and {policy_id} is fail-closed: {detail}",
+        degraded=True,
+    )
 
 
 def _request_of(request: DecisionRequest) -> PolicyRequest:
