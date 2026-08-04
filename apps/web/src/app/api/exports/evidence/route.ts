@@ -1,4 +1,5 @@
 import { getTenantId } from "@/lib/tenant";
+import { attachmentFilename } from "@/lib/download";
 
 export async function GET() {
   const tenantId = await getTenantId();
@@ -15,7 +16,7 @@ export async function GET() {
   return new Response(upstream.body, {
     headers: {
       "Content-Type": "application/x-ndjson",
-      "Content-Disposition": 'attachment; filename="tenant-evidence.ndjson"',
+      "Content-Disposition": attachmentFilename("tenant-evidence.ndjson"),
       "Cache-Control": "no-store",
     },
   });
