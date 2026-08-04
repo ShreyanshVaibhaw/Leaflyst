@@ -63,11 +63,44 @@ class BatchTooLargeError(ValueError):
     pass
 
 
+#: The one source a producer may never claim.
+#:
+#: `admin_api` marks an event as the CONTROL plane's own bookkeeping, and two
+#: things downstream trust that mark. `record_admin_action` writes the record an
+#: auditor reads as "an operator did this", and the metering step below skips
+#: `admin_api` so our bookkeeping cannot eat a tenant's plan allowance.
+#:
+#: Both of those are safe only while the mark is ours to apply. It is: every
+#: legitimate control-plane record calls `ingest_events` in-process, so nothing
+#: real arrives here claiming it. A producer holding a write-only token that
+#: sets it gets a forged operator action inside the tamper-evident chain AND an
+#: unmetered path past its own plan limit.
+CONTROL_PLANE_SOURCE = "admin_api"
+
+
 @router.post("/v1/ingest", response_model=IngestResult)
 def ingest(
     batch: IngestBatch,
     identity: Annotated[IngestIdentity, Depends(ingest_identity_from_token)],
 ) -> IngestResult:
+    forged = [
+        index
+        for index, event in enumerate(batch.events)
+        if event.source.value == CONTROL_PLANE_SOURCE
+    ]
+    if forged:
+        # Rejected, never rewritten to a producer source. A batch claiming to be
+        # the control plane is either an attack or a broken producer, and
+        # silently relabelling it would put an event on the chain that no one
+        # asked for and hide the attempt.
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"source '{CONTROL_PLANE_SOURCE}' is reserved for the control "
+                f"plane and cannot be submitted by a producer "
+                f"(events at index {forged[:10]})"
+            ),
+        )
     try:
         return ingest_events(
             identity.tenant_id,
@@ -179,7 +212,11 @@ def ingest_events(
         # are OUR bookkeeping, not the tenant's recording. Metering them would
         # let issuing a token or changing a setting eat the tenant's plan
         # allowance and degrade their agent's payload capture as a side effect.
-        metered = sum(1 for event in events if event.source.value != "admin_api")
+        #
+        # This exclusion is only sound because the HTTP route refuses the source
+        # outright - see CONTROL_PLANE_SOURCE. Without that check the line below
+        # is an unmetered ingest channel any producer can select into.
+        metered = sum(1 for event in events if event.source.value != CONTROL_PLANE_SOURCE)
         if metered:
             conn.execute(
                 "INSERT INTO metering_daily (tenant_id, day, events) "
