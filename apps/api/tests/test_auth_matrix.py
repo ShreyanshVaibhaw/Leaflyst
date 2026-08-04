@@ -79,49 +79,65 @@ def send(client: TestClient, entry: str, tenant_id: str, headers: dict[str, str]
 
 @pytest.fixture(scope="module")
 def two_tenants():
-    """Tenants A and B, each with its own capability and write-only tokens."""
-    from abx_api.auth import new_ingest_token
+    """Tenants A and B, each with its own capability and write-only tokens.
+
+    Setup and yield sit inside a try/finally because the tenant rows commit
+    before the tokens are minted. Without it, a failure between those two points
+    means the fixture never reaches yield, pytest never runs teardown, and the
+    tenants leak - taking their payload segments with them and breaking the
+    global key-rotation drill in a later file for reasons that look unrelated.
+    """
+    from abx_api.auth import new_ingest_token, new_scan_token
 
     made: list[str] = []
     tokens: dict[str, dict[str, str]] = {}
-    with psycopg.connect(settings.pg_dsn, autocommit=True) as conn:
+    try:
+        with psycopg.connect(settings.pg_dsn, autocommit=True) as conn:
+            for label in ("a", "b"):
+                row = conn.execute(
+                    "INSERT INTO tenants (name) VALUES (%s) RETURNING id",
+                    (f"matrix-{label}-{uuid.uuid4().hex[:8]}",),
+                ).fetchone()
+                assert row is not None
+                tenant_id = str(row[0])
+                made.append(tenant_id)
+                ingest, ingest_hash = new_ingest_token()
+                conn.execute(
+                    "INSERT INTO ingest_tokens (tenant_id, token_hash, label) "
+                    "VALUES (%s,%s,'matrix')",
+                    (tenant_id, ingest_hash),
+                )
+                scan, scan_hash = new_scan_token()
+                conn.execute(
+                    "INSERT INTO scan_upload_tokens (tenant_id, token_hash, label) "
+                    "VALUES (%s,%s,'matrix')",
+                    (tenant_id, scan_hash),
+                )
+                tokens[label] = {"tenant_id": tenant_id, "ingest": ingest, "scan": scan}
+
+        client = TestClient(app)
         for label in ("a", "b"):
-            row = conn.execute(
-                "INSERT INTO tenants (name) VALUES (%s) RETURNING id",
-                (f"matrix-{label}-{uuid.uuid4().hex[:8]}",),
-            ).fetchone()
-            assert row is not None
-            tenant_id = str(row[0])
-            made.append(tenant_id)
-            ingest, ingest_hash = new_ingest_token()
-            conn.execute(
-                "INSERT INTO ingest_tokens (tenant_id, token_hash, label) VALUES (%s,%s,'matrix')",
-                (tenant_id, ingest_hash),
-            )
-            tokens[label] = {"tenant_id": tenant_id, "ingest": ingest}
+            for role in ("viewer", "admin"):
+                response = client.post(
+                    f"/v1/settings/read-tokens?tenant_id={tokens[label]['tenant_id']}",
+                    json={"label": f"matrix-{role}", "role": role},
+                    headers=ADMIN,
+                )
+                assert response.status_code == 200, response.text
+                tokens[label][role] = response.json()["token"]
 
-    client = TestClient(app)
-    for label in ("a", "b"):
-        for role in ("viewer", "admin"):
-            response = client.post(
-                f"/v1/settings/read-tokens?tenant_id={tokens[label]['tenant_id']}",
-                json={"label": f"matrix-{role}", "role": role},
-                headers=ADMIN,
-            )
-            assert response.status_code == 200, response.text
-            tokens[label][role] = response.json()["token"]
-
-    yield tokens
-
-    # _delete_tenant_data is imported at module scope, not here. Two test trees
-    # ship a file called conftest.py, so a deferred import inside teardown can
-    # resolve to services/scanner's copy instead of this one, and the resulting
-    # ImportError leaks both tenants along with their payload segments.
-    with psycopg.connect(settings.pg_dsn, autocommit=True) as conn:
-        for tenant_id in made:
-            _delete_tenant_data(conn, tenant_id)
-            conn.execute("DELETE FROM read_tokens WHERE tenant_id = %s", (tenant_id,))
-            conn.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
+        yield tokens
+    finally:
+        # _delete_tenant_data is imported at module scope, not here. Two test
+        # trees ship a file called conftest.py, so a deferred import inside
+        # teardown can resolve to services/scanner's copy instead of this one,
+        # and the resulting ImportError leaks both tenants along with their
+        # payload segments.
+        with psycopg.connect(settings.pg_dsn, autocommit=True) as conn:
+            for tenant_id in made:
+                _delete_tenant_data(conn, tenant_id)
+                conn.execute("DELETE FROM read_tokens WHERE tenant_id = %s", (tenant_id,))
+                conn.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
 
 
 @requires_stack
@@ -243,3 +259,64 @@ def test_the_matrix_covers_every_documented_route() -> None:
     uncovered = documented - set(GUARDS)
     assert not uncovered, f"routes absent from the auth matrix: {sorted(uncovered)}"
     assert len(GUARDED_ROUTES) + len(PUBLIC_ROUTES) == len(GUARDS)
+
+
+# -- scan-upload token, the third credential kind ------------------------------
+
+SCAN_ROUTES = sorted(e for e in GUARDED_ROUTES if GUARDS[e] == "scan-upload-token")
+
+
+@requires_stack
+@pytest.mark.parametrize("entry", SCAN_ROUTES)
+def test_only_a_scan_upload_token_opens_the_scan_upload_route(
+    entry: str, two_tenants
+) -> None:
+    """Three credential kinds exist, so the matrix needs all three.
+
+    The scanner's token is write-only and single-purpose: it uploads findings.
+    An ingest token, a capability token, and the operator key must all be
+    refused here, or the separation between the scan plane and the recording
+    plane is a naming convention rather than a control.
+    """
+    client = TestClient(app, raise_server_exceptions=False)
+    tenant = two_tenants["a"]
+    for label, headers in (
+        ("ingest", {"Authorization": f"Bearer {tenant['ingest']}"}),
+        ("read-admin", {"Authorization": f"Bearer {tenant['admin']}"}),
+        ("operator-key", ADMIN),
+        ("none", {}),
+    ):
+        response = send(client, entry, tenant["tenant_id"], headers)
+        assert response.status_code == 401, (entry, label, response.status_code)
+
+
+@requires_stack
+@pytest.mark.parametrize(
+    "entry",
+    sorted(
+        e
+        for e in GUARDED_ROUTES
+        if GUARDS[e] in CAPABILITY_GUARDS or GUARDS[e] == "ingest-token"
+    ),
+)
+def test_a_scan_upload_token_opens_nothing_else(entry: str, two_tenants) -> None:
+    """The inverse direction: the scanner's credential is not a skeleton key."""
+    client = TestClient(app, raise_server_exceptions=False)
+    tenant = two_tenants["a"]
+    response = send(
+        client, entry, tenant["tenant_id"], {"Authorization": f"Bearer {tenant['scan']}"}
+    )
+    assert response.status_code == 401, (entry, response.status_code, response.text[:200])
+
+
+@requires_stack
+@pytest.mark.parametrize("entry", SCAN_ROUTES)
+def test_a_scan_upload_token_is_bound_to_its_own_tenant(entry: str, two_tenants) -> None:
+    """Tenant comes from the token, so naming another tenant must not redirect it."""
+    client = TestClient(app, raise_server_exceptions=False)
+    a, b = two_tenants["a"], two_tenants["b"]
+    response = send(
+        client, entry, b["tenant_id"], {"Authorization": f"Bearer {a['scan']}"}
+    )
+    assert response.status_code < 500, (entry, response.status_code)
+    assert b["tenant_id"] not in response.text
