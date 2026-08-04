@@ -19,16 +19,34 @@ def run_retention(now: datetime | None = None) -> int:
     s3 = s3_client()
     for tenant_id, retention_days, policy_updated_at in tenants:
         cutoff = current - timedelta(days=int(retention_days))
+        # When the payload was RECORDED, which is what a retention promise is
+        # about. The object's LastModified is not that: storage tiering changes
+        # an object's class with a same-key copy, and a copy resets
+        # LastModified. Expiring by it meant a tiered batch survived its
+        # retention window by exactly the tiering age - a tenant who asked for
+        # 30 days and tiers at 10 kept payloads for 40.
+        with pg_pool().connection() as conn:
+            recorded_at = {
+                str(key): value
+                for key, value in conn.execute(
+                    "SELECT object_key, created_at FROM payload_batches WHERE tenant_id=%s",
+                    (tenant_id,),
+                ).fetchall()
+            }
         pages = s3.get_paginator("list_objects_v2").paginate(
             Bucket=settings.payload_bucket, Prefix=f"{tenant_id}/"
         )
         for page in pages:
             expired = []
             for item in page.get("Contents", []):
-                modified = item["LastModified"]
-                if modified.tzinfo is None:
-                    modified = modified.replace(tzinfo=UTC)
-                if modified.astimezone(UTC) < cutoff:
+                # An object with no row is an orphan from a crashed write and
+                # has no recorded time to appeal to, so it ages on the store's
+                # clock. Tiering never touches an unreferenced object, so that
+                # clock has not been reset.
+                basis = recorded_at.get(item["Key"]) or item["LastModified"]
+                if basis.tzinfo is None:
+                    basis = basis.replace(tzinfo=UTC)
+                if basis.astimezone(UTC) < cutoff:
                     expired.append({"Key": item["Key"]})
             if expired:
                 # Recheck the policy under the tenant lock before each bounded
