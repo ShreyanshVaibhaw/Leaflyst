@@ -44,6 +44,34 @@ READ_CHUNK = 65_536
 UPSTREAM_TIMEOUT_SECONDS = 300
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect on the agent's behalf.
+
+    urllib carries the request headers to the redirect target, INCLUDING
+    Authorization, and including when the target is a different host. (The
+    `requests` library strips it on a cross-host hop; urllib does not.) Since
+    this proxy exists to forward OAuth bearer tokens to one operator-configured
+    upstream, following a redirect hands that token to whatever host a Location
+    header names - the upstream, anyone who can answer for it over plain http,
+    or an internal address like the cloud metadata service. The agent sees 200
+    and nothing looks wrong.
+
+    Returning None leaves the 3xx unhandled, so it surfaces as an HTTPError and
+    relays to the client verbatim, Location intact. That is the same treatment
+    this module already gives a header/body disagreement: the proxy does not
+    repair, it forwards and lets the client decide. Here the client is also the
+    right decider - it holds the credential and knows which issuer it was
+    keyed to, which the tap cannot see.
+    """
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+#: Built once. Replaces the default redirect handler; keeps everything else.
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def _forwardable(headers: dict[str, str]) -> dict[str, str]:
     return {
         key: value
@@ -118,12 +146,11 @@ class _Handler(BaseHTTPRequestHandler):
             self.upstream, data=body, headers=_forwardable(headers), method="POST"
         )
         try:
-            with urllib.request.urlopen(  # noqa: S310 - operator-configured upstream
-                request, timeout=UPSTREAM_TIMEOUT_SECONDS
-            ) as response:
+            with _OPENER.open(request, timeout=UPSTREAM_TIMEOUT_SECONDS) as response:
                 self._relay(response, body)
         except urllib.error.HTTPError as error:
-            # An error response is a real response; forward it verbatim.
+            # An error response is a real response; forward it verbatim. A 3xx
+            # arrives here too, because _NoRedirect declines to follow it.
             self._relay(error, body)
         except Exception:
             self._incomplete(body, "upstream_unreachable")
@@ -131,6 +158,17 @@ class _Handler(BaseHTTPRequestHandler):
     def _relay(self, response: Any, request_body: bytes) -> None:
         raw_status = getattr(response, "status", None) or getattr(response, "code", None)
         status = int(raw_status) if isinstance(raw_status, int) else 502
+
+        if 300 <= status < 400:
+            # An upstream that redirects a credential-bearing call is worth
+            # seeing. It is the shape of a token-harvesting redirect, and it is
+            # also just how an operator finds out their upstream URL moved.
+            location = response.headers.get("Location") or ""
+            self._observe(SERVER_TO_CLIENT, _synthetic(request_body, [
+                "abx:mcp-upstream-redirect-not-followed:true",
+                f"abx:mcp-upstream-redirect-target:{location[:200]}",
+            ]))
+
         self.send_response(status)
         for key, value in _forwardable(dict(response.headers.items())).items():
             self.send_header(key, value)
