@@ -15,7 +15,11 @@ dependencies = [
     "redis>=5.2",
     "boto3>=1.35",
     # AES-GCM for per-payload data keys (payload_crypto).
-    "cryptography>=44",
+    # >=50 for CVE-2026-69247 (Bleichenbacher oracle in PKCS#7 EnvelopedData
+    # decryption). This service only uses AESGCM, so the affected path is not
+    # reachable, but the advisory is vendor-fixed and the release gate refuses
+    # anything a rebuild would have closed.
+    "cryptography>=50",
     "opentelemetry-proto>=1.42,<2",
     "protobuf>=6.31,<8",
 ]
