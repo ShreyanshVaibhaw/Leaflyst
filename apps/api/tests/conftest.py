@@ -49,6 +49,14 @@ def _delete_tenant_data(conn, tenant_id: str) -> None:
         (tenant_id,),
     )
     for table in (
+        # payload_segments must be here. Without it the tenant row cannot be
+        # deleted (foreign key), so every test that ingests a payload leaks a
+        # tenant AND leaves its segment behind stamped with key id "k1". That id
+        # is also LEGACY_KEY_ID, so a later rotation test - whose rewrap_all() is
+        # global rather than tenant-scoped - tries to unwrap real dev-key data
+        # with its own synthetic k1 and dies on an InvalidTag that has nothing to
+        # do with the code under test.
+        "payload_segments",
         "revocation_actions",
         "alerts",
         "alert_channels",

@@ -28,6 +28,13 @@ _UUID = re.compile(UUID_PATTERN)
 #: non-matching value with the documented 422 before the handler runs.
 ResourceId = Annotated[str, Path(pattern=UUID_PATTERN)]
 
+#: An agent is named, not numbered: `events.agent_id` is a ClickHouse String
+#: holding whatever the SDK or tap reported, such as "pocketos-sandbox". It is
+#: bounded rather than pattern-matched, because constraining the shape of a name
+#: the customer chooses would reject legitimate agents. The value only ever
+#: reaches the database as a bound query parameter.
+AgentName = Annotated[str, Path(min_length=1, max_length=256)]
+
 
 def is_uuid(value: str) -> bool:
     return bool(_UUID.match(value))

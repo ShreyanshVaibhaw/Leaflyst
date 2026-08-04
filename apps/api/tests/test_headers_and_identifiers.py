@@ -41,10 +41,13 @@ TENANT_ROUTES = [
     "/v1/policy",
 ]
 
+# Routes whose path parameter is a UUID primary key. /v1/replay/agents/{id} is
+# deliberately absent: an agent is identified by the name the SDK reported, not
+# by a UUID, so constraining it would reject legitimate agents. See
+# test_replay.test_sessions_can_be_listed_for_a_named_agent.
 OBJECT_ROUTES = [
     "/v1/dashboard/credentials/{id}",
     "/v1/dashboard/findings/{id}",
-    "/v1/replay/agents/{id}/sessions",
     "/v1/replay/credentials/{id}/events",
     "/v1/revocation/{id}/impact",
 ]
