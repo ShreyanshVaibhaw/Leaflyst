@@ -69,7 +69,14 @@ export async function setTenantId(tenantId: string, userRef: string): Promise<vo
   (await cookies()).set(cookieName, `${payload}.${signature(payload)}`, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    // Two signals, because this codebase has two notions of "production" and
+    // only one of them is about transport. The shipped image sets
+    // NODE_ENV=production, but a deployment that terminates TLS and sets
+    // ABX_REQUIRE_HTTPS without it would otherwise send this cookie without the
+    // Secure attribute - over exactly the connection the operator went to the
+    // trouble of encrypting.
+    secure:
+      process.env.NODE_ENV === "production" || process.env.ABX_REQUIRE_HTTPS === "true",
     path: "/",
     maxAge: 60 * 60 * 24 * 365,
   });

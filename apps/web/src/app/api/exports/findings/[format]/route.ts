@@ -1,4 +1,5 @@
 import { getTenantId } from "@/lib/tenant";
+import { downloadHeaders } from "@/lib/download";
 
 const contentTypes: Record<string, string> = { csv: "text/csv", json: "application/json", md: "text/markdown" };
 
@@ -11,5 +12,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ for
   url.searchParams.set("tenant_id", tenantId);
   const response = await fetch(url, { headers: { "X-ABX-Admin-Key": process.env.ABX_ADMIN_KEY ?? "dev-admin-key" }, cache: "no-store" });
   if (!response.ok) return new Response("Export unavailable", { status: response.status });
-  return new Response(await response.text(), { headers: { "Content-Type": contentTypes[format], "Content-Disposition": `attachment; filename="credential-findings.${format}"` } });
+  return new Response(await response.text(), { headers: downloadHeaders(contentTypes[format], `credential-findings.${format}`) });
 }
