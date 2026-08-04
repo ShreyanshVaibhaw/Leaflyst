@@ -341,3 +341,117 @@ def test_a_tenant_cannot_enable_enforcement_for_another_tenant(tenant) -> None:
         with psycopg.connect(settings.pg_dsn, autocommit=True) as conn:
             _delete_tenant_data(conn, other)
             conn.execute("DELETE FROM tenants WHERE id=%s", (other,))
+
+
+# -- what each role can actually CHANGE ----------------------------------------
+
+MUTATING = {"POST", "PUT", "PATCH", "DELETE"}
+
+#: Every mutating route each role can reach, pinned.
+#:
+#: Two tests already guard the halves of this and neither catches the join.
+#: `test_route_guards` pins route -> guard, and `test_only_admin_may_configure`
+#: pins role -> capability. Adding a route behind `require_triage` updates the
+#: first table, a reviewer accepts the diff as "a new triage route", and nobody
+#: is shown that every responder just gained a new way to change state.
+#:
+#: SP-6b words this as "no role outside admin reaches any mutating route",
+#: which is stricter than this product is built to be: a responder revokes
+#: credentials and acknowledges alerts by design, and an incident responder who
+#: cannot respond is not a security win. So the property enforced here is the
+#: one that holds - the reachable set is exactly this and changes are
+#: deliberate - rather than a rule the design already, correctly, breaks.
+ROLE_MUTATING_REACH = {
+    "viewer": set(),
+    "auditor": set(),
+    "responder": {
+        "POST /v1/alerts/{alert_id}/acknowledge",
+        "POST /v1/replay/sessions/{session_id}/share",
+        "POST /v1/revocation/{credential_id}",
+    },
+    "admin": {
+        "POST /v1/alerts/evaluate",
+        "POST /v1/alerts/{alert_id}/acknowledge",
+        "POST /v1/demo/public/run",
+        "POST /v1/demo/run",
+        "POST /v1/integrations/gcp/connect",
+        "POST /v1/onboarding/bootstrap",
+        "POST /v1/replay/sessions/{session_id}/share",
+        "POST /v1/revocation/{credential_id}",
+        "POST /v1/settings/read-tokens",
+        "POST /v1/settings/read-tokens/{token_id}/revoke",
+        "POST /v1/settings/tokens",
+        "POST /v1/settings/tokens/{kind}/{token_id}/revoke",
+        "PUT /v1/alerts/channels",
+        "PUT /v1/policy",
+        "PUT /v1/settings",
+    },
+}
+
+
+def _reach() -> dict[str, set[str]]:
+    from abx_api.rbac import ROLE_CAPABILITIES
+    from abx_api.route_guards import route_guard_inventory
+
+    inventory = route_guard_inventory(app)
+    mutating = {
+        entry: guard
+        for entry, guard in inventory.items()
+        if entry.split(" ", 1)[0] in MUTATING
+    }
+    return {
+        role: {
+            entry
+            for entry, guard in mutating.items()
+            if set(guard.split("+")) <= {c.value for c in caps}
+        }
+        for role, caps in ROLE_CAPABILITIES.items()
+    }
+
+
+def test_each_role_reaches_exactly_the_mutating_routes_it_should() -> None:
+    assert _reach() == ROLE_MUTATING_REACH
+
+
+def test_no_role_can_write_to_the_recording_plane() -> None:
+    """The recording plane takes write-only ingest tokens and nothing else.
+
+    This is the invariant the whole product rests on: the record cannot be
+    shaped by whoever is being recorded. A read-token role that could reach
+    ingest could author the evidence that `/v1/chain/verify` attests to.
+    """
+    from abx_api.route_guards import route_guard_inventory
+
+    recording = {
+        entry
+        for entry, guard in route_guard_inventory(app).items()
+        if guard in {"ingest-token", "scan-upload-token"}
+    }
+    assert recording, "the inventory found no recording-plane routes to check"
+
+    reachable = set().union(*_reach().values())
+    assert recording & reachable == set(), (
+        f"a read-token role reaches the recording plane: {recording & reachable}"
+    )
+
+
+def test_the_reach_table_would_notice_a_widened_role() -> None:
+    """The negative control.
+
+    Comparing a computed table against itself would pass with any contents, so
+    this grants a role one extra capability and shows the reach changes. If it
+    ever does not, the pinned table above is decorative.
+    """
+    from abx_api.rbac import ROLE_CAPABILITIES, Capability
+    from abx_api.route_guards import route_guard_inventory
+
+    widened = {c.value for c in ROLE_CAPABILITIES["auditor"] | {Capability.CONFIGURE}}
+    gained = {
+        entry
+        for entry, guard in route_guard_inventory(app).items()
+        if entry.split(" ", 1)[0] in MUTATING and set(guard.split("+")) <= widened
+    }
+    assert gained, "granting CONFIGURE to auditor changed nothing, so the table proves nothing"
+    assert gained - ROLE_MUTATING_REACH["auditor"], (
+        "the widened role reaches nothing new, so the pinned table is decorative"
+    )
