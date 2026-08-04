@@ -307,3 +307,67 @@ def test_erasure_still_destroys_the_only_key(tenant, keyring_of) -> None:
     assert gone is not None and int(gone[0]) == 0
     # No key row means no way back, regardless of which master key is active.
     assert key_rotation.rewrap_all() == 0
+
+
+@requires_stack
+def test_rewrap_never_puts_a_plaintext_data_key_anywhere_readable(
+    tenant, keyring_of, caplog
+) -> None:
+    """Re-wrap decrypts a data key in memory to re-encrypt it under the new
+    master key. That plaintext DEK is the one thing that must never be written
+    down: it opens the payload without any master key at all, so a copy of it in
+    a log line or an exported bundle undoes envelope encryption entirely.
+
+    The DEK is recovered here through the same unwrap the pipeline uses, so the
+    value searched for is the real one. Searching for a value that was never the
+    key would pass no matter what re-wrap wrote.
+    """
+    import logging
+
+    from abx_api.ingest import ingest_events
+    from abx_api.payload_crypto import unwrap_key
+    from abx_schemas import IngestEvent
+
+    tenant_id, _ = tenant
+    keyring_of(f"k1:{KEY_A}")
+    ingest_events(tenant_id, [IngestEvent.model_validate({
+        "event_id": str(uuid.uuid4()), "agent_id": "a",
+        "session_id": f"rewrap-{uuid.uuid4()}", "seq": 0,
+        "ts": "2026-07-31T00:00:00.000Z", "source": "mcp_tap",
+        "event_type": "mcp_request",
+        "operation": {"name": "tools/call", "outcome": "success"},
+        "resource_refs": [], "payload": "wrapped body",
+    })])
+
+    with pg_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT wrapped_key, key_nonce, master_key_id FROM payload_segments "
+            "WHERE tenant_id=%s ORDER BY payload_ref DESC LIMIT 1", (tenant_id,),
+        ).fetchone()
+    assert row is not None
+    dek = unwrap_key(bytes(row[0]), bytes(row[1]), str(row[2]))
+    assert len(dek) == 32, "the recovered value is not a data key, so this proves nothing"
+
+    keyring_of(f"k2:{KEY_B}", retired=f"k1:{KEY_A}")
+    with caplog.at_level(logging.DEBUG):
+        assert key_rotation.rewrap_all() >= 1
+
+    encoded = {
+        dek.hex(),
+        base64.b64encode(dek).decode(),
+        base64.b64encode(dek).decode().rstrip("="),
+        repr(dek),
+    }
+    logged = caplog.text
+    for form in encoded:
+        assert form not in logged, "re-wrap logged the plaintext data key"
+
+    # And it is not in the database either: the column holds the WRAPPED key,
+    # so the plaintext appearing there would mean the wrap was skipped.
+    with pg_pool().connection() as conn:
+        stored = conn.execute(
+            "SELECT wrapped_key FROM payload_segments WHERE tenant_id=%s", (tenant_id,)
+        ).fetchall()
+    for (wrapped,) in stored:
+        assert bytes(wrapped) != dek, "the data key was stored unwrapped"
+        assert dek not in bytes(wrapped), "the plaintext data key is inside the wrapped blob"
