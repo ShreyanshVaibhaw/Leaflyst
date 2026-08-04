@@ -273,3 +273,43 @@ def test_no_evaded_form_survives_into_storage_or_replay(evasion_tenant) -> None:
     assert replay.status_code == 200, replay.text[:200]
     assert session_id in replay.text, "replay returned nothing about this session"
     assert BODY not in replay.text, "replay echoed an evaded form"
+
+
+# -- two rules claiming the same text ------------------------------------------
+
+@pytest.mark.parametrize("written", [
+    "api_key=ｇｈｐ_" + BODY,
+    "client_secret=ghp_" + BODY[:10] + "​" + BODY[10:],
+    "called api_key=ｇｈｐ_" + BODY + " at noon",
+])
+def test_two_rules_matching_the_same_span_do_not_abort_ingest(written: str) -> None:
+    """`api_key=<a github token>` is claimed by two rules at once.
+
+    After folding they resolve to the identical original span. Carrying the Rule
+    in the span tuple made Python fall through to comparing two Rule objects,
+    which are not orderable - so this raised TypeError and took the whole ingest
+    batch with it. A recorder that drops a batch because a payload looked
+    suspicious is the inversion this product exists to avoid.
+    """
+    scrubbed, fired = redact(written)
+    assert BODY not in scrubbed, "the secret survived"
+    # Every rule that matched is still reported: merging decides what the text
+    # becomes, not what is recorded as detected.
+    assert "github-token" in fired and len(fired) >= 2, fired
+    assert scrubbed.count("[REDACTED") == 1, f"the span was replaced twice: {scrubbed!r}"
+
+
+def test_a_partially_matched_secret_does_not_keep_its_tail() -> None:
+    """The fold pass must read the ORIGINAL text, not the direct pass's output.
+
+    An Authorization header whose token carries a zero-width space is matched by
+    the header rule only up to the invisible character. With the fold running
+    second, that head was already rewritten and the remaining tail no longer
+    resembled anything - so twenty-six characters of the secret stayed in the
+    record while the redaction looked like it had worked.
+    """
+    written = "authorization: Bearer ghp_" + BODY[:10] + "​" + BODY[10:]
+    scrubbed, fired = redact(written)
+    assert "github-token" in fired
+    assert BODY[10:] not in scrubbed, "the tail of the secret survived"
+    assert scrubbed == "authorization: Bearer [REDACTED:github-token:eeee]"

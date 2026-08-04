@@ -135,7 +135,7 @@ The platform fix is an organization-only ruleset rule, unavailable to a user-own
 
 ## An encoded secret is not decoded and rescanned
 
-Accepted 2026-08-05, owner: repository maintainer, expires 2027-02-05.
+Accepted 2026-08-04 (UTC), owner: repository maintainer, expires 2027-02-04.
 
 Redaction matches patterns against text as written.
 A secret that has been base64-, hex-, or otherwise encoded before it reaches the recorder does not match, and is stored.
@@ -151,6 +151,12 @@ A false positive there destroys the record an incident depends on, and the failu
 
 The compensating control is that payload bodies are envelope-encrypted at rest with a per-payload data key, and reachable only through tenant-scoped, capability-checked routes.
 An encoded secret in a stored payload is not readable without an authorised token for that tenant.
+
+A compensating control is only worth writing down if a reader can check it, so it is named rather than asserted.
+The encryption is `seal` and `open_sealed` in `apps/api/src/abx_api/payload_crypto.py`: a fresh AES-GCM data key per payload, itself wrapped under the master keyring.
+`apps/api/tests/test_key_rotation.py` covers the lifecycle, including that erasure destroys the only key and that re-wrap never writes a plaintext data key anywhere readable.
+The access path is guarded by the capability model in `apps/api/src/abx_api/rbac.py`, and `apps/api/tests/test_auth_matrix.py` asserts route by route that no credential reaches another tenant's data.
+
 That is weaker than redaction: redaction means the secret was never written down, while this means it was written down and access-controlled.
 The distinction is the whole reason this is recorded here rather than left implied.
 
@@ -158,7 +164,7 @@ The distinction is the whole reason this is recorded here rather than left impli
 
 ## A secret split across separate fields is not reassembled
 
-Accepted 2026-08-05, owner: repository maintainer, expires 2027-02-05.
+Accepted 2026-08-04 (UTC), owner: repository maintainer, expires 2027-02-04.
 
 Neither half of a split token is a credential.
 `ghp_` followed by eighteen characters matches no rule and authenticates nowhere.

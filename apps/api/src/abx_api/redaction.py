@@ -144,35 +144,76 @@ def _fold(text: str) -> tuple[str, list[int]]:
 
 
 def _redact_via_folding(text: str, rules: Sequence[Rule]) -> tuple[str, list[str]]:
-    """Catch secrets that only fail to match because of how they are written."""
+    """Catch secrets that only fail to match because of how they are written.
+
+    Runs against the ORIGINAL text, not against whatever the direct pass left
+    behind. That ordering matters more than it looks. Given an Authorization
+    header whose token carries a zero-width space, the direct pass matches the
+    value up to the invisible character and rewrites that head - after which the
+    remaining tail is no longer part of anything a rule recognises, and
+    twenty-six characters of the secret stay in the record. Matching the
+    original means the full token is still there to be found.
+    """
     folded, origin = _fold(text)
     if folded == text:
         return text, []  # nothing was folded, so the direct pass already saw it
 
-    spans: list[tuple[int, int, Rule, str]] = []
+    spans: list[tuple[int, int, str]] = []
     fired: list[str] = []
     for rule in rules:
         for match in rule.pattern.finditer(folded):
             start, end = match.span(rule.secret_group)
             if start < 0 or end <= start:
                 continue
-            spans.append((origin[start], origin[end - 1] + 1, rule,
-                          match.group(rule.secret_group)))
+            spans.append((
+                origin[start], origin[end - 1] + 1,
+                _replacement(rule, match.group(rule.secret_group)),
+            ))
             if rule.id not in fired:
                 fired.append(rule.id)
     if not spans:
         return text, []
 
+    # Overlapping spans have to be merged before anything is rewritten.
+    #
+    # Two rules routinely claim the same text: `api_key=<a github token>` is
+    # matched by both `generic-api-key-assignment` and `github-token`, and after
+    # folding they resolve to the identical original span. Replacing both would
+    # corrupt the surrounding text, and sorting tuples that carry the rule made
+    # Python fall through to comparing two Rule objects - which are not
+    # orderable, so this raised TypeError and took the whole ingest batch with
+    # it. A recorder that drops a batch because a payload was suspicious is
+    # exactly the inversion this product exists to avoid.
+    #
+    # Every rule that matched still appears in `fired`: the merge decides what
+    # the text becomes, not what is reported as detected.
+    merged: list[tuple[int, int, str]] = []
+    for start, end, replacement in sorted(spans, key=lambda s: (s[0], -s[1])):
+        if merged and start < merged[-1][1]:
+            previous_start, previous_end, previous_replacement = merged[-1]
+            # Keep the widest cover; a shorter overlapping match is already
+            # inside it and would only redact the same secret twice.
+            if end > previous_end:
+                merged[-1] = (previous_start, end, previous_replacement)
+            continue
+        merged.append((start, end, replacement))
+
     # Right to left so earlier offsets stay valid as the string is rewritten.
     scrubbed = text
-    for start, end, rule, secret in sorted(spans, reverse=True):
-        scrubbed = scrubbed[:start] + _replacement(rule, secret) + scrubbed[end:]
+    for start, end, replacement in reversed(merged):
+        scrubbed = scrubbed[:start] + replacement + scrubbed[end:]
     return scrubbed, fired
 
 
 def redact(text: str, rules: Sequence[Rule] = RULES) -> tuple[str, list[str]]:
     """Apply every rule; returns (scrubbed text, ordered unique rule ids that fired)."""
-    fired: list[str] = []
+    # The fold pass goes FIRST and reads the untouched input. Running it second,
+    # over text the direct pass had already rewritten, meant a partially matched
+    # secret lost its head and the tail became unrecognisable - see
+    # _redact_via_folding. When nothing folds it returns the text unchanged, so
+    # the ordinary path is unaffected.
+    text, fired = _redact_via_folding(text, rules)
+
     for rule in rules:
 
         def sub(m: re.Match[str], rule: Rule = rule) -> str:
@@ -188,16 +229,8 @@ def redact(text: str, rules: Sequence[Rule] = RULES) -> tuple[str, list[str]]:
             )
 
         text, n = rule.pattern.subn(sub, text)
-        if n:
+        if n and rule.id not in fired:
             fired.append(rule.id)
-
-    # Second pass for anything written so it would not match the first. Run
-    # after, not instead: the direct pass is exact, and this one only sees what
-    # survived it.
-    text, folded_fired = _redact_via_folding(text, rules)
-    for rule_id in folded_fired:
-        if rule_id not in fired:
-            fired.append(rule_id)
     return text, fired
 
 
