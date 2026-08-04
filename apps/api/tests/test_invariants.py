@@ -32,6 +32,7 @@ from abx_api.store import ch_client
 from abx_schemas import IngestEvent
 from conftest import _delete_tenant_data, requires_stack
 from fastapi.testclient import TestClient
+from psycopg import sql
 
 ADMIN = {"X-ABX-Admin-Key": "dev-admin-key"}
 
@@ -215,7 +216,13 @@ def test_no_cleartext_secret_survives_in_any_readable_store(sweep_tenant) -> Non
         ]
         rows = []
         for table in tables:
-            rows.append(str(conn.execute(f'SELECT * FROM "{table}"').fetchall()))
+            # Identifier() rather than an f-string: these names come from
+            # information_schema, so they are not hostile, but a table whose
+            # name contains a quote would silently break the sweep and take a
+            # storage layer out of scope without failing anything.
+            rows.append(str(conn.execute(
+                sql.SQL("SELECT * FROM {}").format(sql.Identifier(table))
+            ).fetchall()))
     postgres = " ".join(rows)
 
     anchor_all()
