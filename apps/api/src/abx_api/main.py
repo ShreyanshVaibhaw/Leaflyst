@@ -19,6 +19,7 @@ from abx_api.policy import router as policy_router
 from abx_api.rate_limit import RateLimit
 from abx_api.replay import router as replay_router
 from abx_api.reports import router as reports_router
+from abx_api.request_guard import RejectNullBytes
 from abx_api.revocation import router as revocation_router
 from abx_api.security_headers import SecurityHeaders, interactive_docs_enabled
 from abx_api.settings import production_config_errors, settings
@@ -56,6 +57,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Rejected before routing, body parsing, or any dependency runs.
+app.add_middleware(RejectNullBytes)
 # Added last so it wraps everything else: a 429 from the limiter and a rejection
 # from the host check are responses too, and they need the same headers as a
 # successful one.
