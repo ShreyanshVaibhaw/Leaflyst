@@ -95,3 +95,37 @@ def test_every_documented_route_is_in_the_table() -> None:
         for method in operations
     }
     assert documented <= set(json.loads(TABLE_PATH.read_text(encoding="utf-8")))
+
+
+def test_the_checked_in_openapi_document_still_matches_the_application() -> None:
+    """SP-6b asks that the matrix be regenerated against the CURRENT document.
+
+    Nothing regenerated `openapi.json`, so it could drift from the app while
+    every test that reads it kept passing. The drift is quiet in the dangerous
+    direction: two tests assert "every DOCUMENTED route is covered", and a route
+    missing from a stale document is a route those assertions stop asking about.
+
+    The guard table itself is pinned to the live app, so this is a second lock
+    on the same door rather than the only one - but it is the lock the gate
+    names, and a stale published contract is its own problem for anyone
+    generating a client from it.
+    """
+    from abx_api.main import app
+
+    live = {
+        f"{method.upper()} {path}"
+        for path, operations in app.openapi()["paths"].items()
+        for method in operations
+    }
+    on_disk = {
+        f"{method.upper()} {path}"
+        for path, operations in json.loads(
+            (TABLE_PATH.parent / "openapi.json").read_text(encoding="utf-8")
+        )["paths"].items()
+        for method in operations
+    }
+    assert live == on_disk, (
+        f"openapi.json is stale; regenerate it. "
+        f"only in the app: {sorted(live - on_disk)}; "
+        f"only in the document: {sorted(on_disk - live)}"
+    )
