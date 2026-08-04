@@ -23,8 +23,10 @@ import uuid
 
 import psycopg
 import pytest
+from abx_api.anchor import anchor_all
 from abx_api.ingest import _scrub_credential_ref, ingest_events
 from abx_api.main import app
+from abx_api.reports import _md
 from abx_api.settings import settings
 from abx_api.store import ch_client
 from abx_schemas import IngestEvent
@@ -115,14 +117,20 @@ def test_a_secret_in_credential_ref_never_reaches_storage(sweep_tenant) -> None:
         assert credential_ref.startswith("[REDACTED:github-token:"), (seq, credential_ref)
         assert "github-token" in redactions, f"seq {seq} did not record the redaction"
 
+    # Every surface must be searched while it is actually serving. "the token is
+    # absent" is true of a 409 body too, so each response is pinned to 200 and to
+    # a marker proving it rendered this session before the absence is believed.
+    anchor_all()
     client = TestClient(app)
-    for path in (
-        f"/v1/replay/sessions/{session_id}",
-        f"/v1/reports/sessions/{session_id}.md",
-        "/v1/evidence/tenant",
+    for path, marker in (
+        (f"/v1/replay/sessions/{session_id}", session_id),
+        (f"/v1/reports/sessions/{session_id}.md", _md(session_id)),
+        ("/v1/evidence/tenant", session_id),
     ):
-        body = client.get(path, params={"tenant_id": tenant_id}, headers=ADMIN).text
-        assert GITHUB_PAT not in body, f"{path} echoed the raw token"
+        response = client.get(path, params={"tenant_id": tenant_id}, headers=ADMIN)
+        assert response.status_code == 200, (path, response.status_code, response.text[:200])
+        assert marker in response.text, f"{path} returned nothing about this session"
+        assert GITHUB_PAT not in response.text, f"{path} echoed the raw token"
 
 
 def test_the_scrub_would_be_visible_if_it_were_removed() -> None:
@@ -180,6 +188,12 @@ def test_no_cleartext_secret_survives_in_any_readable_store(sweep_tenant) -> Non
     Object storage is deliberately excluded: payload bodies are encrypted at
     rest, so a plaintext search there returns nothing whether redaction ran or
     not, and a check that cannot fail is not a check.
+
+    The same reasoning applies to a non-200: an error body contains no secret
+    either. Each API surface is pinned to 200 and to a marker showing it
+    rendered THIS session, so absence is evidence rather than an artifact of the
+    request having failed. Evidence export needs an anchor before it will serve
+    at all, which is exactly how this was passing without searching anything.
     """
     tenant_id, _ = sweep_tenant
     session_id = f"inv-{uuid.uuid4().hex[:8]}"
@@ -204,21 +218,19 @@ def test_no_cleartext_secret_survives_in_any_readable_store(sweep_tenant) -> Non
             rows.append(str(conn.execute(f'SELECT * FROM "{table}"').fetchall()))
     postgres = " ".join(rows)
 
+    anchor_all()
     client = TestClient(app)
-    surfaces = {
-        "clickhouse": events,
-        "postgres": postgres,
-        "replay": client.get(
-            f"/v1/replay/sessions/{session_id}", params={"tenant_id": tenant_id}, headers=ADMIN
-        ).text,
-        "report": client.get(
-            f"/v1/reports/sessions/{session_id}.md",
-            params={"tenant_id": tenant_id}, headers=ADMIN,
-        ).text,
-        "evidence": client.get(
-            "/v1/evidence/tenant", params={"tenant_id": tenant_id}, headers=ADMIN
-        ).text,
-    }
+    surfaces = {"clickhouse": events, "postgres": postgres}
+    for name, path, marker in (
+        ("replay", f"/v1/replay/sessions/{session_id}", session_id),
+        ("report", f"/v1/reports/sessions/{session_id}.md", _md(session_id)),
+        ("evidence", "/v1/evidence/tenant", session_id),
+    ):
+        response = client.get(path, params={"tenant_id": tenant_id}, headers=ADMIN)
+        assert response.status_code == 200, (name, response.status_code, response.text[:200])
+        assert marker in response.text, f"{name} returned nothing about this session"
+        surfaces[name] = response.text
+
     for name, body in surfaces.items():
         # The token must be gone from every layer. The access key ID survives in
         # credential_ref by design, so it is asserted absent from the payload
@@ -242,4 +254,3 @@ def test_no_cleartext_secret_survives_in_any_readable_store(sweep_tenant) -> Non
     ).result_rows
     assert fired and fired[0][0], "no event reached ClickHouse, or redaction never ran"
     assert "github-token" in fired[0][0], fired[0][0]
-    assert session_id in surfaces["replay"], "the replay surface returned nothing to search"
