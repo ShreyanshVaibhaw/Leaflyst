@@ -29,10 +29,12 @@ Stdlib only, like the rest of the tap.
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import json
 import queue
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -70,6 +72,31 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 #: Built once. Replaces the default redirect handler; keeps everything else.
 _OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def plaintext_offsite(upstream: str) -> bool:
+    """Whether this upstream would put the bearer token on the wire in the clear.
+
+    The tap forwards Authorization verbatim, so the transport under it is part
+    of the credential's security, not a deployment detail. `https` is fine
+    anywhere. Plain `http` is allowed only to loopback, where the bytes never
+    reach a network - that is how the tap is developed and tested, and refusing
+    it would mean a TLS certificate to run the test suite.
+
+    Rejecting plaintext also closes the metadata-service target for free: link
+    local metadata endpoints speak http only, so an upstream pointed at one is
+    refused before the tap ever forwards a credential to it.
+    """
+    parsed = urllib.parse.urlparse(upstream)
+    if parsed.scheme == "https":
+        return False
+    host = parsed.hostname or ""
+    try:
+        return not ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        # A name, not a literal. Only the reserved loopback name is trusted;
+        # anything else may resolve anywhere, including off this host.
+        return host.lower() not in {"localhost", "localhost."}
 
 
 def _forwardable(headers: dict[str, str]) -> dict[str, str]:
@@ -250,6 +277,11 @@ def serve(
     """Start the proxy. Returns (server, thread); caller shuts it down."""
     if not upstream.startswith(("http://", "https://")):
         raise ValueError("upstream MCP server must be an http(s) URL")
+    if plaintext_offsite(upstream):
+        raise ValueError(
+            "upstream MCP server must use https: forwarding the agent's bearer "
+            "token to a plaintext http upstream puts it on the wire in the clear"
+        )
 
     handler = type("BoundHandler", (_Handler,), {"upstream": upstream, "observe": observe})
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)

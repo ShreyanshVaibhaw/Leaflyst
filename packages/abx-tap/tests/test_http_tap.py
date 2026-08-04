@@ -24,7 +24,7 @@ from urllib.request import build_opener
 
 import pytest
 from abx_tap import mcp_spec
-from abx_tap.http_tap import _NoRedirect, auth_refs, serve
+from abx_tap.http_tap import _NoRedirect, auth_refs, plaintext_offsite, serve
 from abx_tap.observer import Observer
 
 # header.{"iss":"https://auth.example.com","aud":"https://mcp.example.com"}.sig
@@ -262,6 +262,42 @@ def test_unreachable_upstream_answers_the_agent_and_records_the_failure() -> Non
 def test_upstream_must_be_an_http_url() -> None:
     with pytest.raises(ValueError):
         serve("ftp://example.com", queue.Queue(), port=0)
+
+
+# -- the transport under the token is part of the token's security -------------
+
+@pytest.mark.parametrize("upstream", [
+    "http://mcp.example.com/mcp",
+    "http://10.0.0.5/mcp",
+    "http://169.254.169.254/latest/meta-data/",  # metadata services are http only
+    "http://[2001:db8::1]/mcp",
+    "http://LOCALHOST.evil.example.com/mcp",     # not the loopback name
+])
+def test_a_plaintext_offsite_upstream_is_refused(upstream: str) -> None:
+    """The tap forwards Authorization verbatim, so plain http would put the
+    agent's bearer token on the wire in the clear."""
+    with pytest.raises(ValueError, match="https"):
+        serve(upstream, queue.Queue(), port=0)
+
+
+@pytest.mark.parametrize("upstream", [
+    "https://mcp.example.com/mcp",
+    "http://127.0.0.1:8931/mcp",
+    "http://localhost:8931/mcp",
+    "http://[::1]:8931/mcp",
+])
+def test_https_anywhere_and_plain_http_to_loopback_are_allowed(upstream: str) -> None:
+    """Loopback plaintext stays usable: the bytes never reach a network, and
+    refusing it would mean a TLS certificate to run the test suite."""
+    assert plaintext_offsite(upstream) is False
+
+
+def test_the_refusal_is_about_transport_not_the_hostname() -> None:
+    """The negative control. If this returned True for https it would be
+    rejecting hosts rather than plaintext, and the allowance above would be
+    passing for the wrong reason."""
+    assert plaintext_offsite("https://169.254.169.254/mcp") is False
+    assert plaintext_offsite("http://169.254.169.254/mcp") is True
 
 
 # -- the bearer token does not travel to a redirect target (SP-6b) -------------
