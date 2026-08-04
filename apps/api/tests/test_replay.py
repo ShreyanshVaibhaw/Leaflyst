@@ -115,3 +115,43 @@ def test_tamper_flips_session_verification_badge(tenant: tuple[str, str]) -> Non
     )
     assert replay.status_code == 200
     assert replay.json()["verification"]["valid"] is False
+
+
+def test_sessions_can_be_listed_for_a_named_agent(tenant: tuple[str, str]) -> None:
+    """Agents are named, not numbered, and this route had two defects at once.
+
+    The ClickHouse query aliased an aggregate as `agent_id` and then filtered on
+    an unqualified `agent_id`, so the server resolved the WHERE reference to the
+    aggregate and rejected every call with ILLEGAL_AGGREGATION. That 500 was
+    then mistaken for a malformed-identifier fault and "fixed" by constraining
+    the path parameter to a UUID, which left the SQL bug in place and rejected
+    every real agent name with 422.
+
+    The route had tests. None of them called it, which is the only reason a
+    route that answered 500 unconditionally could sit there.
+    """
+    tenant_id, token = tenant
+    session_id = "session-named-agent"
+    ingested = client.post(
+        "/v1/ingest", headers={"Authorization": f"Bearer {token}"},
+        json={"events": [_event(session_id, 0, "AKIA1234567890ABCDEF")]},
+    )
+    assert ingested.status_code == 200, ingested.text
+
+    listed = client.get(
+        "/v1/replay/agents/checkout-agent/sessions",
+        params={"tenant_id": tenant_id}, headers=ADMIN,
+    )
+    assert listed.status_code == 200, listed.text
+    sessions = listed.json()
+    assert [item["session_id"] for item in sessions] == [session_id]
+    assert sessions[0]["agent_id"] == "checkout-agent"
+    assert sessions[0]["event_count"] == 1
+
+    # An agent that does not exist is an empty list, not an error and not a leak.
+    absent = client.get(
+        "/v1/replay/agents/no-such-agent/sessions",
+        params={"tenant_id": tenant_id}, headers=ADMIN,
+    )
+    assert absent.status_code == 200, absent.text
+    assert absent.json() == []

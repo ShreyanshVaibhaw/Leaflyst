@@ -14,7 +14,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from abx_api.export_safety import csv_cell
-from abx_api.identifiers import ResourceId
+from abx_api.identifiers import AgentName, ResourceId
 from abx_api.rbac import require_read, require_triage
 from abx_api.store import ch_client, get_payload, pg_pool
 from abx_api.verify import VerifyResult, verify_tenant_chain
@@ -185,11 +185,15 @@ def agents(tenant_id: str) -> list[AgentSummary]:
     response_model=list[SessionSummary],
     dependencies=read_only,
 )
-def agent_sessions(tenant_id: str, agent_id: ResourceId) -> list[SessionSummary]:
+def agent_sessions(tenant_id: str, agent_id: AgentName) -> list[SessionSummary]:
+    # The filter is qualified as events.agent_id because the select list defines
+    # an alias of the same name over an aggregate. Unqualified, ClickHouse
+    # resolves the WHERE reference to that alias and rejects the whole query
+    # with ILLEGAL_AGGREGATION, which made this route a 500 on every call.
     rows = _query(
         "SELECT session_id, any(agent_id) AS agent_id, min(ts) AS started_at, "
         "max(ts) AS ended_at, count() AS event_count, countIf(op_outcome = 'error') AS errors "
-        "FROM events WHERE tenant_id = %(tenant)s AND agent_id = %(agent)s "
+        "FROM events WHERE tenant_id = %(tenant)s AND events.agent_id = %(agent)s "
         "GROUP BY session_id ORDER BY started_at DESC",
         {"tenant": tenant_id, "agent": agent_id},
     )
