@@ -262,32 +262,75 @@ class PreparedEvent:
     sealed: SealedPayload | None = None
 
 
-def _scrub_credential_ref(ie: IngestEvent) -> tuple[IngestEvent, list[str]]:
-    """Enforce the contract the schema only states.
+def _scrub_metadata(ie: IngestEvent) -> tuple[IngestEvent, list[str]]:
+    """Scrub every agent-supplied string, not only the payload.
 
-    credential_ref is documented as "a fingerprint reference into the identity
-    graph; never a secret value", but the agent supplies it and the recording
-    plane does not depend on the agent's honesty. Unscrubbed, an agent that puts
-    a real key here - maliciously, or by passing the wrong variable - gets it
-    stored in ClickHouse in cleartext, echoed into the replay timeline and the
-    incident report, and carried into evidence exports.
+    "Never store secret values anywhere" is an invariant about the record, not
+    about one field. Redaction ran on `payload` and (since SP-6) on
+    `credential_ref`, which left every other string the agent controls storing
+    whatever it was handed: the operation name and target, resource refs, the
+    agent id, and the session id. All five reached ClickHouse verbatim and came
+    back out through replay.
 
-    Identifier rules are deliberately excluded. An AWS access key id is the
-    public half of the pair, and the scanner stores it verbatim as
-    credentials.fingerprint - scrubbing it here would break the join that links
-    a replayed event to the credential it used, while protecting nothing. What
-    is scrubbed is material that is actually secret: secret keys, tokens, JWTs,
-    private keys, and passwords.
+    None of this needs an attacker. An agent that names an operation after the
+    URL it called, or derives a session id from a request that carried a token,
+    leaks by accident - and the record is the one place a leaked secret is kept
+    deliberately, indexed, and exported.
 
-    The redacted form keeps the last four characters, which is exactly what a
-    fingerprint is for, so the field still correlates events to one credential.
+    Identifier rules are deliberately excluded, for the reason SP-6 established:
+    an AWS access key id is the PUBLIC half of the pair and is exactly what
+    `credentials.fingerprint` stores, so scrubbing it would break the join
+    between a replayed event and the credential it used while protecting
+    nothing. What is scrubbed is material that is actually secret - secret keys,
+    tokens, JWTs, private keys, and passwords.
+
+    Scrubbing the join keys is deliberate too. Redaction is deterministic and
+    keeps the last four characters, so every event in a session scrubs to the
+    same id and replay still groups them; what breaks is looking a session up by
+    a raw secret, which is not a lookup anyone should be able to perform.
     """
-    if not ie.credential_ref:
+    fired: list[str] = []
+    update: dict[str, Any] = {}
+
+    def clean(value: str) -> str:
+        if not value:
+            return value
+        scrubbed, rules = redact(value, SECRET_RULES)
+        fired.extend(rules)
+        return scrubbed
+
+    def clean_optional(value: str | None) -> str | None:
+        return None if value is None else clean(value)
+
+    for field in ("credential_ref", "agent_id", "session_id"):
+        original = getattr(ie, field, None)
+        replaced = clean_optional(None if original is None else str(original))
+        if replaced is not None and replaced != original:
+            update[field] = replaced
+
+    operation_update = {
+        name: replaced
+        for name in ("name", "target")
+        if (replaced := clean_optional(getattr(ie.operation, name, None)))
+        != getattr(ie.operation, name, None)
+    }
+    if operation_update:
+        update["operation"] = ie.operation.model_copy(update=operation_update)
+
+    # Rebuilt as ResourceRef, not left as plain strings: model_copy does not
+    # validate, so assigning bare strings here would hand every downstream
+    # reader of `.root` an AttributeError at write time.
+    original_refs = [ref.root for ref in ie.resource_refs]
+    scrubbed_refs = [clean(ref) for ref in original_refs]
+    if scrubbed_refs != original_refs:
+        update["resource_refs"] = [
+            type(ref)(scrubbed)
+            for ref, scrubbed in zip(ie.resource_refs, scrubbed_refs, strict=True)
+        ]
+
+    if not update:
         return ie, []
-    scrubbed, fired = redact(ie.credential_ref, SECRET_RULES)
-    if not fired:
-        return ie, []
-    return ie.model_copy(update={"credential_ref": scrubbed}), fired
+    return ie.model_copy(update=update), list(dict.fromkeys(fired))
 
 
 def _prepare_one(tenant_id: str, ie: IngestEvent, capture_payloads: bool) -> PreparedEvent:
@@ -299,7 +342,7 @@ def _prepare_one(tenant_id: str, ie: IngestEvent, capture_payloads: bool) -> Pre
     # Before the early return below and before the event is hashed, so an event
     # carrying no payload at all is still scrubbed, and the chain commits to the
     # value that was actually stored.
-    ie, ref_redactions = _scrub_credential_ref(ie)
+    ie, ref_redactions = _scrub_metadata(ie)
     if ie.payload is None:
         return PreparedEvent(ie, hashlib.sha256(b"").hexdigest(), None, ref_redactions, False)
     body, payload_redactions, truncated = redact_and_truncate(

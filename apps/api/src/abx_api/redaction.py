@@ -11,6 +11,7 @@ Pattern-based rules only at MVP; entropy detection is a v0.2 improvement.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -103,6 +104,72 @@ IDENTIFIER_RULE_IDS = frozenset({"aws-access-key-id"})
 SECRET_RULES: Sequence[Rule] = [r for r in RULES if r.id not in IDENTIFIER_RULE_IDS]
 
 
+#: Characters that render as nothing but break a regex in half.
+#:
+#: Unicode category Cf is format characters - zero-width space and joiners, the
+#: bidirectional overrides, the byte-order mark. Soft hyphen is Cf too. A token
+#: with one of these in the middle looks identical to the real thing on screen
+#: and to anyone who pastes it, but `ghp_[A-Za-z0-9]{36}` no longer matches it.
+#: They arrive by accident far more often than by attack: copying a credential
+#: out of a rendered web page or a terminal picks them up silently.
+def _is_invisible(char: str) -> bool:
+    return unicodedata.category(char) in {"Cf", "Mn"}
+
+
+def _fold(text: str) -> tuple[str, list[int]]:
+    """Return (searchable text, index of each character in the original).
+
+    NFKC collapses compatibility forms, so a full-width or otherwise confusable
+    prefix folds to the ASCII the rules are written against. Invisible
+    characters are dropped outright.
+
+    The index map is the point. Matching on a folded copy and then scrubbing
+    that copy would leave the ORIGINAL - the thing actually stored - still
+    carrying the secret. The map lets a match found in folded space redact the
+    exact original span, so what gets written is the real text with the real
+    secret removed.
+    """
+    folded: list[str] = []
+    origin: list[int] = []
+    for index, char in enumerate(text):
+        if _is_invisible(char):
+            continue
+        replacement = unicodedata.normalize("NFKC", char)
+        # NFKC can expand one character into several; every piece points back
+        # at the single original character it came from.
+        for piece in replacement:
+            folded.append(piece)
+            origin.append(index)
+    return "".join(folded), origin
+
+
+def _redact_via_folding(text: str, rules: Sequence[Rule]) -> tuple[str, list[str]]:
+    """Catch secrets that only fail to match because of how they are written."""
+    folded, origin = _fold(text)
+    if folded == text:
+        return text, []  # nothing was folded, so the direct pass already saw it
+
+    spans: list[tuple[int, int, Rule, str]] = []
+    fired: list[str] = []
+    for rule in rules:
+        for match in rule.pattern.finditer(folded):
+            start, end = match.span(rule.secret_group)
+            if start < 0 or end <= start:
+                continue
+            spans.append((origin[start], origin[end - 1] + 1, rule,
+                          match.group(rule.secret_group)))
+            if rule.id not in fired:
+                fired.append(rule.id)
+    if not spans:
+        return text, []
+
+    # Right to left so earlier offsets stay valid as the string is rewritten.
+    scrubbed = text
+    for start, end, rule, secret in sorted(spans, reverse=True):
+        scrubbed = scrubbed[:start] + _replacement(rule, secret) + scrubbed[end:]
+    return scrubbed, fired
+
+
 def redact(text: str, rules: Sequence[Rule] = RULES) -> tuple[str, list[str]]:
     """Apply every rule; returns (scrubbed text, ordered unique rule ids that fired)."""
     fired: list[str] = []
@@ -123,6 +190,14 @@ def redact(text: str, rules: Sequence[Rule] = RULES) -> tuple[str, list[str]]:
         text, n = rule.pattern.subn(sub, text)
         if n:
             fired.append(rule.id)
+
+    # Second pass for anything written so it would not match the first. Run
+    # after, not instead: the direct pass is exact, and this one only sees what
+    # survived it.
+    text, folded_fired = _redact_via_folding(text, rules)
+    for rule_id in folded_fired:
+        if rule_id not in fired:
+            fired.append(rule_id)
     return text, fired
 
 

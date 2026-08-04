@@ -132,3 +132,41 @@ GitHub-owned actions need only the workflow edit, since they are permitted as a 
 Nothing binds a check *name* to check *content*.
 A single pull request can rewrite `.github/workflows/ci.yml` and still report four green checks of the right names from the right app.
 The platform fix is an organization-only ruleset rule, unavailable to a user-owned repository, so the current mitigation is that exactly one account has write access.
+
+## An encoded secret is not decoded and rescanned
+
+Accepted 2026-08-05, owner: repository maintainer, expires 2027-02-05.
+
+Redaction matches patterns against text as written.
+A secret that has been base64-, hex-, or otherwise encoded before it reaches the recorder does not match, and is stored.
+
+The evasions that only change how the secret is *written* are caught rather than accepted.
+A token carrying a zero-width space, a soft hyphen, a combining mark, a bidirectional override, or a full-width homoglyph prefix now folds to its canonical form for matching, and the match redacts the exact span in the original text.
+Those arrive by accident, which is precisely the case redaction exists for: copying a credential out of a rendered page or a terminal picks up invisible characters silently.
+
+Encoding is different, and the difference is why it is accepted rather than fixed.
+Catching it means decoding every base64-shaped run in every payload and rescanning, at every nesting level.
+This product records a large volume of legitimately encoded data, so that turns a recorder into something that rewrites its own evidence on a guess about what a byte sequence means.
+A false positive there destroys the record an incident depends on, and the failure is silent.
+
+The compensating control is that payload bodies are envelope-encrypted at rest with a per-payload data key, and reachable only through tenant-scoped, capability-checked routes.
+An encoded secret in a stored payload is not readable without an authorised token for that tenant.
+That is weaker than redaction: redaction means the secret was never written down, while this means it was written down and access-controlled.
+The distinction is the whole reason this is recorded here rather than left implied.
+
+`test_an_encoded_secret_is_not_decoded_and_rescanned` asserts the current behaviour, so if a future rule does start catching an encoded form, the test fails and this acceptance gets revisited rather than quietly outliving its reason.
+
+## A secret split across separate fields is not reassembled
+
+Accepted 2026-08-05, owner: repository maintainer, expires 2027-02-05.
+
+Neither half of a split token is a credential.
+`ghp_` followed by eighteen characters matches no rule and authenticates nowhere.
+Detecting the split would mean concatenating every combination of every field and rescanning, which is quadratic in the number of fields and still misses a split across two events.
+
+It is also the wrong threat model.
+Redaction protects against a secret reaching the record by accident.
+Splitting one across fields is not something an agent does by accident; it is something an attacker does deliberately, and an attacker doing it already holds the secret.
+They gain nothing by storing half of it in a system they must authenticate to read back.
+
+`test_a_secret_split_across_fields_is_not_reassembled` asserts that neither half matches a rule, so the reasoning above stays true or the test fails.
