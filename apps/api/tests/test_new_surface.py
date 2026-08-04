@@ -455,3 +455,55 @@ def test_the_reach_table_would_notice_a_widened_role() -> None:
     assert gained - ROLE_MUTATING_REACH["auditor"], (
         "the widened role reaches nothing new, so the pinned table is decorative"
     )
+
+
+# -- three writers, one chain --------------------------------------------------
+
+@requires_stack
+def test_the_chain_verifies_with_agent_admin_and_policy_events_interleaved(
+    tenant,
+) -> None:
+    """Three independent writers now append to one per-tenant chain.
+
+    Agent recording, control-plane bookkeeping, and policy decisions each have
+    their own test showing they chain. None showed them chaining TOGETHER, and
+    the ordering between them is exactly where a per-tenant hash chain built by
+    three callers would break. An evidence pack that fails to verify is worth
+    nothing to the auditor holding it.
+    """
+    from abx_api.admin_audit import record_admin_action
+    from abx_api.anchor import anchor_all
+
+    tenant_id, token = tenant
+    enforce(tenant_id, True)
+    session_id = f"mixed-{uuid.uuid4().hex[:8]}"
+
+    # Deliberately interleaved rather than grouped: grouping would let a bug
+    # that only mis-orders across writers slip through.
+    assert submit(token, [producer_event(session_id, 0, "mcp_tap")]).status_code == 200
+    record_admin_action(tenant_id, "retention changed", "45d")
+    put_policy(tenant_id, FAIL_CLOSED)
+    assert ask(token)["allowed"] is False
+    assert submit(token, [producer_event(session_id, 1, "sdk_langgraph")]).status_code == 200
+    record_admin_action(tenant_id, "read token issued", "tok-1")
+    assert submit(token, [producer_event(session_id, 2, "otel_ingest")]).status_code == 200
+
+    sources = dict(ch_client().query(
+        "SELECT source, count() FROM events WHERE tenant_id=%(t)s GROUP BY source",
+        parameters={"t": tenant_id},
+    ).result_rows)
+    assert sources.get("admin_api", 0) >= 3, sources  # 2 audits + the policy write
+    assert sum(sources.values()) >= 7, sources
+
+    verified = TestClient(app).get(
+        "/v1/chain/verify", params={"tenant_id": tenant_id}, headers=ADMIN
+    ).json()
+    assert verified["valid"] is True, verified
+
+    # And the pack an auditor is handed verifies too, which is the point of the
+    # chain holding in the first place.
+    anchor_all()
+    pack = TestClient(app).get(
+        "/v1/evidence/tenant", params={"tenant_id": tenant_id}, headers=ADMIN
+    )
+    assert pack.status_code == 200, pack.text[:200]

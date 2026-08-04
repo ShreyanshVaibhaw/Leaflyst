@@ -16,11 +16,13 @@ is already going wrong:
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from abx_api import tiering
 from abx_api.chain import row_to_event, verify_chain
 from abx_api.ingest import ingest_events
+from abx_api.settings import settings
 from abx_api.store import ch_client, get_payload, pg_pool
 from abx_api.tiering import TierClassError, cold_storage_class, run_tiering
 from abx_schemas import IngestEvent
@@ -293,3 +295,81 @@ def test_verification_work_is_bounded_by_the_post_anchor_suffix(tenant) -> None:
     # Only the post-anchor suffix plus the anchor checkpoint event is walked,
     # not all 15 events.
     assert result.events_checked < anchored_head + 3
+
+
+# -- tiering must not extend how long a payload is kept ------------------------
+
+@requires_stack
+def test_tiering_does_not_postpone_erasure(tenant, monkeypatch) -> None:
+    """A retention promise is about when the payload was RECORDED.
+
+    Tiering changes an object's storage class with a same-key copy, and a copy
+    resets the object's LastModified. Retention used to expire by that
+    timestamp, so tiering pushed the deadline out by exactly the tiering age: a
+    tenant who asked for 30 days and tiered at 10 kept payloads for 40. The
+    copy here is real, so the reset is real - only the storage class is stubbed,
+    because MinIO rejects the infrequent-access family.
+    """
+    from abx_api.retention import run_retention
+    from abx_api.store import s3_client
+
+    tenant_id, _ = tenant
+    session_id = f"erase-{uuid.uuid4()}"
+    ingest_events(tenant_id, [an_event(session_id)])
+
+    with pg_pool().connection() as conn:
+        row = conn.execute(
+            "SELECT object_key FROM payload_batches WHERE tenant_id=%s", (tenant_id,)
+        ).fetchone()
+    assert row is not None
+    object_key = str(row[0])
+
+    # Age the batch past a 30-day retention window, and tier it.
+    _enable_tiering(tenant_id, tier_days=10, age_days=60)
+    with pg_pool().connection() as conn:
+        conn.execute(
+            "UPDATE tenant_settings SET retention_days=30 WHERE tenant_id=%s", (tenant_id,)
+        )
+
+    real = s3_client()
+
+    class _ClassStub:
+        """Performs a REAL self-copy; only the refused class is swapped out."""
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(real, name)
+
+        def copy_object(self, **kwargs: object) -> dict:
+            kwargs.pop("StorageClass", None)
+            kwargs["MetadataDirective"] = "REPLACE"
+            kwargs["Metadata"] = {"abx-tier": "cold"}
+            return real.copy_object(**kwargs)
+
+    monkeypatch.setattr("abx_api.tiering.s3_client", lambda: _ClassStub())
+    assert run_tiering().transitioned >= 1
+
+    # The object's own clock now reads "just now", which is the whole problem.
+    touched = real.head_object(
+        Bucket=settings.payload_bucket, Key=object_key
+    )["LastModified"]
+    assert touched > datetime.now(UTC) - timedelta(minutes=5), (
+        "the copy did not reset LastModified, so this test cannot detect the bug"
+    )
+
+    assert run_retention() >= 1
+    remaining = real.list_objects_v2(
+        Bucket=settings.payload_bucket, Prefix=f"{tenant_id}/"
+    ).get("Contents", [])
+    assert not [o for o in remaining if o["Key"] == object_key], (
+        "a tiered payload outlived the tenant's retention window"
+    )
+
+    # Erasure means the key is gone, not just the bytes.
+    with pg_pool().connection() as conn:
+        segments = conn.execute(
+            "SELECT count(*) FROM payload_segments s JOIN payload_batches b "
+            "ON b.id = s.batch_id WHERE b.tenant_id=%s", (tenant_id,)
+        ).fetchone()
+    assert segments is not None and int(segments[0]) == 0, (
+        "the wrapped data keys survived the object they decrypt"
+    )

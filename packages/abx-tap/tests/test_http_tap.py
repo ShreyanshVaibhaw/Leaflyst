@@ -455,3 +455,24 @@ def test_the_leak_is_real_without_the_handler(redirecting_upstream) -> None:
         "a default opener no longer forwards Authorization across a redirect, "
         "so the containment test above proves nothing"
     )
+
+
+def test_the_listener_binds_only_to_loopback(origin) -> None:
+    """The tap terminates the agent's credential-bearing traffic, so it must not
+    be reachable from the network.
+
+    Bound to 0.0.0.0 it would be an open proxy into the operator's configured
+    upstream for anyone who can route to the host, and it forwards whatever
+    Authorization header it is handed.
+    """
+    import ipaddress
+
+    observe: queue.Queue = queue.Queue(maxsize=10)
+    server, _thread = serve(
+        f"http://127.0.0.1:{origin.server_address[1]}/mcp", observe, port=0
+    )
+    try:
+        host = ipaddress.ip_address(server.server_address[0])
+        assert host.is_loopback, f"the tap listens on {host}, reachable off-host"
+    finally:
+        server.shutdown()
