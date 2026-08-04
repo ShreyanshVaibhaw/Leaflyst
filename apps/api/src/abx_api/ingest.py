@@ -29,7 +29,7 @@ from abx_api.auth import IngestIdentity, ingest_identity_from_token
 from abx_api.chain import GENESIS_HASH, compute_event_hash, event_to_row, format_ts
 from abx_api.metering import LimitState, decide_capture
 from abx_api.payload_crypto import SealedPayload, seal
-from abx_api.redaction import redact_and_truncate
+from abx_api.redaction import SECRET_RULES, redact, redact_and_truncate
 from abx_api.settings import settings
 from abx_api.store import (
     EVENT_COLUMNS,
@@ -225,15 +225,50 @@ class PreparedEvent:
     sealed: SealedPayload | None = None
 
 
+def _scrub_credential_ref(ie: IngestEvent) -> tuple[IngestEvent, list[str]]:
+    """Enforce the contract the schema only states.
+
+    credential_ref is documented as "a fingerprint reference into the identity
+    graph; never a secret value", but the agent supplies it and the recording
+    plane does not depend on the agent's honesty. Unscrubbed, an agent that puts
+    a real key here - maliciously, or by passing the wrong variable - gets it
+    stored in ClickHouse in cleartext, echoed into the replay timeline and the
+    incident report, and carried into evidence exports.
+
+    Identifier rules are deliberately excluded. An AWS access key id is the
+    public half of the pair, and the scanner stores it verbatim as
+    credentials.fingerprint - scrubbing it here would break the join that links
+    a replayed event to the credential it used, while protecting nothing. What
+    is scrubbed is material that is actually secret: secret keys, tokens, JWTs,
+    private keys, and passwords.
+
+    The redacted form keeps the last four characters, which is exactly what a
+    fingerprint is for, so the field still correlates events to one credential.
+    """
+    if not ie.credential_ref:
+        return ie, []
+    scrubbed, fired = redact(ie.credential_ref, SECRET_RULES)
+    if not fired:
+        return ie, []
+    return ie.model_copy(update={"credential_ref": scrubbed}), fired
+
+
 def _prepare_one(tenant_id: str, ie: IngestEvent, capture_payloads: bool) -> PreparedEvent:
     """Redact -> truncate -> digest -> seal.
 
     Deliberately performs no object-store call: every payload in the request is
     written together afterwards as a single object.
     """
+    # Before the early return below and before the event is hashed, so an event
+    # carrying no payload at all is still scrubbed, and the chain commits to the
+    # value that was actually stored.
+    ie, ref_redactions = _scrub_credential_ref(ie)
     if ie.payload is None:
-        return PreparedEvent(ie, hashlib.sha256(b"").hexdigest(), None, [], False)
-    body, redactions, truncated = redact_and_truncate(ie.payload, settings.payload_max_bytes)
+        return PreparedEvent(ie, hashlib.sha256(b"").hexdigest(), None, ref_redactions, False)
+    body, payload_redactions, truncated = redact_and_truncate(
+        ie.payload, settings.payload_max_bytes
+    )
+    redactions = list(dict.fromkeys(ref_redactions + payload_redactions))
     # The digest covers the redacted plaintext, so the chain still commits to
     # real content and offline verification is unaffected by encryption at rest.
     digest = hashlib.sha256(body).hexdigest()
