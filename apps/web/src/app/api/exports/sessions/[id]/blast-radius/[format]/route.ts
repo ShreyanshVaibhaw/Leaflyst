@@ -1,4 +1,4 @@
-import { attachmentFilename } from "@/lib/download";
+import { downloadHeaders } from "@/lib/download";
 import { getTenantId } from "@/lib/tenant";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string; format: string }> }) {
@@ -10,5 +10,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const response = await fetch(url, { headers: { "X-ABX-Admin-Key": process.env.ABX_ADMIN_KEY ?? "dev-admin-key" }, cache: "no-store" });
   if (!response.ok) return new Response("Export unavailable", { status: response.status });
   const type = format === "csv" ? "text/csv" : "application/json";
-  return new Response(await response.text(), { headers: { "Content-Type": type, "Content-Disposition": attachmentFilename(`session-${id}-blast-radius.${format}`) } });
+  return new Response(await response.text(), { headers: downloadHeaders(type, `session-${id}-blast-radius.${format}`) });
 }

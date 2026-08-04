@@ -21,3 +21,25 @@ export function attachmentFilename(name: string): string {
   const safe = name.replaceAll(/[^a-zA-Z0-9_.-]/g, "_");
   return `attachment; filename="${safe}"`;
 }
+
+/**
+ * The complete header set for a tenant-scoped download.
+ *
+ * Cache-Control belongs here rather than at each call site. Passing
+ * `cache: "no-store"` to the upstream `fetch` governs whether Next.js reuses
+ * that fetch; it says nothing about whether the response this route hands back
+ * may be stored. Without an explicit policy these exports - one tenant's
+ * credential findings, sessions, and blast radius - are cacheable by the browser
+ * and by any shared cache on the path.
+ *
+ * Returning one object means a new export route gets the filename rule and the
+ * cache rule together, which is the only reason the filename rule was missing
+ * from one route to begin with.
+ */
+export function downloadHeaders(contentType: string, name: string): Record<string, string> {
+  return {
+    "Content-Type": contentType,
+    "Content-Disposition": attachmentFilename(name),
+    "Cache-Control": "no-store",
+  };
+}

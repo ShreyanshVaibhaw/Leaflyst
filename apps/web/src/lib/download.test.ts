@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attachmentFilename } from "./download";
+import { attachmentFilename, downloadHeaders } from "./download";
 
 describe("attachmentFilename", () => {
   it("keeps ordinary names intact", () => {
@@ -40,5 +40,20 @@ describe("attachmentFilename", () => {
     const response = new Response("body", { headers: { "Content-Disposition": header } });
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(response.headers.get("content-disposition")).toBe(header);
+  });
+});
+
+describe("downloadHeaders", () => {
+  it("marks every tenant-scoped export as uncacheable", () => {
+    // fetch(..., { cache: "no-store" }) governs whether Next reuses the upstream
+    // call. It says nothing about whether the response handed to the browser may
+    // be stored, which is what a shared cache on the path acts on.
+    expect(downloadHeaders("text/csv", "x.csv")["Cache-Control"]).toBe("no-store");
+  });
+
+  it("carries the sanitised filename, so one call site cannot get half the rule", () => {
+    const headers = downloadHeaders("text/csv", 'session-x"; filename="evil.exe.csv');
+    expect(headers["Content-Disposition"].match(/filename=/g)).toHaveLength(1);
+    expect(headers["Content-Type"]).toBe("text/csv");
   });
 });
