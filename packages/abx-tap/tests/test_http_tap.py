@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import json
 import queue
+import socket
 import threading
 import urllib.error
 import urllib.request
@@ -476,3 +477,84 @@ def test_the_listener_binds_only_to_loopback(origin) -> None:
         assert host.is_loopback, f"the tap listens on {host}, reachable off-host"
     finally:
         server.shutdown()
+
+
+# -- request smuggling: the proxy must emit one unambiguous framing ------------
+
+def _raw_exchange(port: int, request: bytes) -> bytes:
+    """Send hand-built bytes and read the reply to EOF.
+
+    Hand-built because the point is the exact framing on the wire, and no HTTP
+    client will let you send a contradictory one. `Connection: close` makes the
+    server end the exchange, so the reply can be read to completion instead of
+    guessing a length - closing early instead resets the connection mid-write
+    and leaves a handler traceback on stderr for every run.
+    """
+    sock = socket.create_connection(("127.0.0.1", port), timeout=10)
+    try:
+        sock.sendall(request)
+        chunks = []
+        while chunk := sock.recv(4096):
+            chunks.append(chunk)
+        return b"".join(chunks)
+    finally:
+        sock.close()
+
+
+def _raw_post(port: int, extra_headers: bytes, body: bytes) -> bytes:
+    return _raw_exchange(port, (
+        b"POST /mcp HTTP/1.1\r\nHost: tap\r\nConnection: close\r\n"
+        b"Content-Type: application/json\r\n"
+        + extra_headers
+        + b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n"
+        + body
+    ))
+
+
+def test_contradictory_framing_reaches_the_origin_as_one_framing(tap, origin) -> None:
+    """A request carrying both Content-Length and Transfer-Encoding is the
+    classic smuggling setup: it only works if two hops disagree about where the
+    request ends.
+
+    This is the one place the proxy deliberately does NOT forward verbatim, and
+    the exception is correct. Framing headers are hop-by-hop by definition, so a
+    proxy that passed both through would be handing the disagreement to the
+    origin - which is the vulnerability. The tap reads the body once and lets
+    the client library state a single length.
+    """
+    url, _observe = tap
+    port = int(url.rsplit(":", 1)[1].split("/", 1)[0])
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode()
+
+    response = _raw_post(port, b"Transfer-Encoding: chunked\r\n", body)
+    assert response.startswith(b"HTTP/1.1 200"), response[:80]
+
+    assert len(_Origin.received) == 1, "the origin saw a different number of requests"
+    headers = {k.lower(): v for k, v in _Origin.received[0]["headers"].items()}
+    assert headers.get("transfer-encoding") is None, (
+        "the tap forwarded the contradictory framing to the origin"
+    )
+    assert headers.get("content-length") == str(len(body))
+    assert _Origin.received[0]["body"] == body, "the body was altered while re-framing"
+
+
+def test_the_client_cannot_make_the_tap_emit_two_requests(tap) -> None:
+    """Trailing bytes past Content-Length must not become a second request
+    upstream. They stay on the client's own connection, where the worst case is
+    that client confusing itself."""
+    url, _observe = tap
+    port = int(url.rsplit(":", 1)[1].split("/", 1)[0])
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/list"}).encode()
+    smuggled = b'{"jsonrpc":"2.0","id":99,"method":"tools/call"}'
+
+    _raw_exchange(port, (
+        b"POST /mcp HTTP/1.1\r\nHost: tap\r\nConnection: close\r\n"
+        b"Content-Type: application/json\r\n"
+        b"Content-Length: " + str(len(body)).encode() + b"\r\n\r\n" + body + smuggled
+    ))
+
+    bodies = [item["body"] for item in _Origin.received]
+    assert bodies, "the origin saw nothing, so this proves nothing about smuggling"
+    assert smuggled not in b"".join(bodies), "the smuggled request reached the origin"
+    for seen in bodies:
+        assert seen == body, f"the origin received an unexpected body: {seen!r}"
