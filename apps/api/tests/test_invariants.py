@@ -24,7 +24,7 @@ import uuid
 import psycopg
 import pytest
 from abx_api.anchor import anchor_all
-from abx_api.ingest import _scrub_credential_ref, ingest_events
+from abx_api.ingest import _scrub_metadata, ingest_events
 from abx_api.main import app
 from abx_api.reports import _md
 from abx_api.settings import settings
@@ -142,7 +142,7 @@ def test_the_scrub_would_be_visible_if_it_were_removed() -> None:
     pass with the protection deleted.
     """
     hostile = event("s", 0, credential_ref=GITHUB_PAT, payload=None)
-    scrubbed, fired = _scrub_credential_ref(hostile)
+    scrubbed, fired = _scrub_metadata(hostile)
 
     assert hostile.credential_ref == GITHUB_PAT, "the input itself must carry the secret"
     assert scrubbed.credential_ref != hostile.credential_ref, "removing the scrub is undetectable"
@@ -153,7 +153,7 @@ def test_the_scrub_would_be_visible_if_it_were_removed() -> None:
     # to credentials on it. Scrubbing it would break that join while protecting
     # nothing, because the id is the public half of the pair.
     for fingerprint in (AWS_KEY_ID, "AKIA-DEMO-POCKETOS"):
-        untouched, none_fired = _scrub_credential_ref(
+        untouched, none_fired = _scrub_metadata(
             event("s", 0, credential_ref=fingerprint, payload=None)
         )
         assert untouched.credential_ref == fingerprint
