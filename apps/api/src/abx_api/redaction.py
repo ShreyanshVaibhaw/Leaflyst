@@ -11,6 +11,7 @@ Pattern-based rules only at MVP; entropy detection is a v0.2 improvement.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 
@@ -91,10 +92,21 @@ def _replacement(rule: Rule, secret: str) -> str:
     return f"[REDACTED:{rule.id}:{secret[-4:]}]"
 
 
-def redact(text: str) -> tuple[str, list[str]]:
+#: Rules whose match is an IDENTIFIER rather than a secret. An AWS access key id
+#: (AKIA...) is the public half of the pair; the scanner stores it verbatim as
+#: credentials.fingerprint, and the replay timeline joins events to credentials
+#: on exactly that value. Scrubbing it out of a credential reference would break
+#: the join while protecting nothing, so callers that are scrubbing a reference
+#: rather than free text exclude these.
+IDENTIFIER_RULE_IDS = frozenset({"aws-access-key-id"})
+
+SECRET_RULES: Sequence[Rule] = [r for r in RULES if r.id not in IDENTIFIER_RULE_IDS]
+
+
+def redact(text: str, rules: Sequence[Rule] = RULES) -> tuple[str, list[str]]:
     """Apply every rule; returns (scrubbed text, ordered unique rule ids that fired)."""
     fired: list[str] = []
-    for rule in RULES:
+    for rule in rules:
 
         def sub(m: re.Match[str], rule: Rule = rule) -> str:
             secret = m.group(rule.secret_group)
