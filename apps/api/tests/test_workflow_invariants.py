@@ -26,6 +26,11 @@ WORKFLOWS = sorted(WORKFLOW_DIR.glob("*.yml"))
 #: A full 40-character commit SHA. Anything shorter is a tag or a branch.
 PINNED = re.compile(r"^[^@]+@[0-9a-f]{40}$")
 
+#: The release a pin corresponds to, e.g. `# v7.0.1`. Any comment at all would
+#: satisfy a bare "has a comment" check - `# temporary` tells a reviewer nothing
+#: about which release the SHA is, which is the entire point of the comment.
+VERSION_COMMENT = re.compile(r"#\s*v?\d+(\.\d+)*")
+
 
 def _steps(workflow: dict) -> list[tuple[str, dict]]:
     return [
@@ -33,6 +38,28 @@ def _steps(workflow: dict) -> list[tuple[str, dict]]:
         for job_name, job in workflow.get("jobs", {}).items()
         for step in job.get("steps", [])
     ]
+
+
+def _external_uses(workflow: dict) -> list[tuple[str, str]]:
+    """Every third-party reference, from steps AND from job-level `uses`.
+
+    A job can call a reusable workflow with `jobs.<id>.uses`, which has no
+    `steps` at all - so a check that only walks steps would let a tag-pinned
+    reusable workflow through while reporting everything as pinned. Local calls
+    (`./.github/workflows/...`) are excluded: they are this repository's own
+    code at this repository's own commit.
+    """
+    found = [
+        (job, str(step["uses"]))
+        for job, step in _steps(workflow)
+        if "uses" in step
+    ]
+    found += [
+        (job, str(spec["uses"]))
+        for job, spec in workflow.get("jobs", {}).items()
+        if "uses" in spec
+    ]
+    return [(job, uses) for job, uses in found if not uses.startswith("./")]
 
 
 @pytest.fixture(scope="module")
@@ -46,22 +73,26 @@ def test_every_action_is_pinned_to_a_commit(workflows) -> None:
     workflow's token. That is the whole shape of the tj-actions/changed-files
     compromise."""
     unpinned = [
-        f"{path.name}:{job} -> {step['uses']}"
+        f"{path.name}:{job} -> {uses}"
         for path, workflow in workflows.items()
-        for job, step in _steps(workflow)
-        if "uses" in step and not PINNED.match(str(step["uses"]))
+        for job, uses in _external_uses(workflow)
+        if not PINNED.match(uses)
     ]
     assert not unpinned, f"actions not pinned to a full commit SHA: {unpinned}"
 
 
 def test_every_pin_carries_a_readable_version(workflows) -> None:
     """A bare SHA is unreviewable. The comment is what lets a human see that a
-    pin moved from v7.0.1 to something else."""
+    pin moved from v7.0.1 to something else - so it has to name a release, not
+    merely exist."""
     missing = [
         line.strip()
         for path in workflows
         for line in path.read_text(encoding="utf-8").splitlines()
-        if "uses:" in line and "@" in line and "#" not in line
+        if "uses:" in line
+        and "@" in line
+        and not line.strip().startswith("#")
+        and not VERSION_COMMENT.search(line)
     ]
     assert not missing, f"pinned actions without a version comment: {missing}"
 
@@ -95,11 +126,14 @@ def test_no_workflow_reads_a_secret(workflows) -> None:
     check is on the raw text rather than the parsed tree because a secret can be
     referenced from any expression position.
     """
+    # Both spellings: `secrets.NAME` and `secrets['NAME']`. Matching only the
+    # dotted form leaves the index form as a way in.
+    reference = re.compile(r"secrets\s*(\.|\[)")
     users = [
         f"{path.name}:{line.strip()}"
         for path in workflows
         for line in path.read_text(encoding="utf-8").splitlines()
-        if "secrets." in line
+        if reference.search(line)
     ]
     assert not users, f"workflow reads a secret: {users}"
 
@@ -129,6 +163,14 @@ def test_no_security_step_is_made_non_blocking(workflows) -> None:
         for path, workflow in workflows.items()
         for job, step in _steps(workflow)
         if step.get("continue-on-error")
+    ]
+    # A job-level flag makes EVERY step in it advisory at once, so checking only
+    # steps would miss the broader version of the same mistake.
+    soft += [
+        f"{path.name}:{job} (whole job)"
+        for path, workflow in workflows.items()
+        for job, spec in workflow.get("jobs", {}).items()
+        if spec.get("continue-on-error")
     ]
     assert not soft, f"steps that cannot fail the run: {soft}"
 
