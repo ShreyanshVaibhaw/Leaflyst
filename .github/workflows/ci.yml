@@ -210,3 +210,99 @@ jobs:
       - name: Stop release topology
         if: always()
         run: docker compose --env-file infra/release.env.example -f infra/compose.release.yml down --volumes
+
+  # Every gate above is asserted to actually fire. A scanner that runs, reports
+  # nothing, and is believed is indistinguishable from one that is misconfigured,
+  # and the difference only shows up on the day it was needed.
+  #
+  # These run in-workflow rather than as a one-time manual check, for the same
+  # reason the SBOM tamper proof in `containers` does: a control verified once on
+  # a throwaway branch tells you about that branch. Verified every run, it tells
+  # you about the change in front of you.
+  #
+  # Each step breaks exactly one thing, in a temporary location, and fails if the
+  # tool it targets does NOT reject it. Nothing here touches the repository.
+  gate-negative-controls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          python-version: "3.12"
+
+      - name: A vulnerable dependency must fail the audit
+        run: |
+          # requests 2.19.1 carries CVE-2018-18074. Pinned rather than latest so
+          # this step does not start passing when an advisory is withdrawn.
+          echo "requests==2.19.1" > /tmp/vulnerable-requirements.txt
+          if uv run --with pip-audit pip-audit -r /tmp/vulnerable-requirements.txt \
+              --progress-spinner off; then
+            echo "pip-audit accepted a known-vulnerable pin; the audit gate is not working" >&2
+            exit 1
+          fi
+
+      - name: A leaked credential must fail the secret scan
+        run: |
+          # Generated at runtime, high entropy, and written outside the
+          # repository. Two things this deliberately is not:
+          #
+          # A literal in this file - gitleaks scans the repository, so a fixed
+          # token here would fail the real secret-scan step.
+          #
+          # A low-entropy placeholder. `ghp_AAAA...` is structurally valid and
+          # gitleaks ignores it, because the rules carry an entropy threshold.
+          # The first version of this probe used exactly that and the step
+          # passed while detecting nothing.
+          mkdir -p /tmp/leak-probe
+          body=$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 36)
+          printf 'token = "ghp_%s"\n' "$body" > /tmp/leak-probe/config.py
+          if docker run --rm -v /tmp/leak-probe:/probe -v "$PWD/.gitleaks.toml:/config.toml" \
+              zricethezav/gitleaks:v8.21.2 detect --source /probe --config /config.toml \
+              --no-git --redact --no-banner --exit-code 1; then
+            echo "gitleaks accepted a planted token; the secret gate is not working" >&2
+            exit 1
+          fi
+
+      - name: A misconfigured container must fail the infrastructure scan
+        run: |
+          mkdir -p /tmp/iac-probe
+          # No tag pin and no non-root USER: AVD-DS-0001 (MEDIUM) and
+          # AVD-DS-0002 (HIGH). Verified against trivy 0.58.1 rather than
+          # assumed - an earlier version of this probe used `USER root`, which
+          # this scanner does not flag, so the step would have passed while
+          # proving nothing.
+          printf 'FROM alpine:latest\nRUN apk add --no-cache curl\n' > /tmp/iac-probe/Dockerfile
+          if docker run --rm -v /tmp/iac-probe:/probe aquasec/trivy:0.58.1 config \
+              --quiet --severity MEDIUM,HIGH,CRITICAL --exit-code 1 /probe; then
+            echo "trivy accepted a root-user latest-tag image; the IaC gate is not working" >&2
+            exit 1
+          fi
+
+      - name: Schema drift must fail the codegen check
+        run: |
+          uv sync --all-packages
+          # Confirm the check passes before breaking it, so a check that always
+          # fails cannot be mistaken for one that detects drift.
+          uv run python packages/schemas/scripts/codegen.py --check
+          # A file the check actually compares. `head -1` picked
+          # generated/__init__.py, which codegen does not regenerate - drifting
+          # it left the check green, so the probe passed while proving nothing.
+          generated=packages/schemas/src/abx_schemas/generated/event.py
+          test -f "$generated" || { echo "no generated file found to drift" >&2; exit 1; }
+          printf '\n# drift introduced by the negative-control step\n' >> "$generated"
+          if uv run python packages/schemas/scripts/codegen.py --check; then
+            echo "codegen --check accepted a drifted artifact; the drift gate is not working" >&2
+            exit 1
+          fi
+          git checkout -- "$generated"
+
+      - name: A silently skipped integration suite must fail the tests
+        run: |
+          uv sync --all-packages
+          # The data stack is deliberately NOT started. Without ABX_REQUIRE_STACK
+          # every integration test skips and the run is green, which is how 173
+          # tests once passed by not running.
+          if ABX_REQUIRE_STACK=1 uv run pytest apps/api/tests/test_ingest_e2e.py -q; then
+            echo "the suite passed with no data stack; the skip gate is not working" >&2
+            exit 1
+          fi
