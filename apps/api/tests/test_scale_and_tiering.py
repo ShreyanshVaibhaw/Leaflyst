@@ -404,7 +404,11 @@ def test_retention_leaves_no_orphaned_keys_or_objects(tenant) -> None:
             "WHERE b.tenant_id=%s GROUP BY b.object_key", (tenant_id,),
         ).fetchall()
     assert before and int(before[0][1]) >= 1, "no batch or key was written to erase"
-    object_key = str(before[0][0])
+    # Every object this tenant recorded, not just the first. Pinning one key
+    # would let a second object survive retention while the test stayed green,
+    # and the number of objects a batch produces is not this test's business to
+    # assume.
+    object_keys = {str(key) for key, _count in before}
 
     # Expire everything for this tenant.
     with pg_pool().connection() as conn:
@@ -423,7 +427,8 @@ def test_retention_leaves_no_orphaned_keys_or_objects(tenant) -> None:
         Bucket=settings.payload_bucket, Prefix=f"{tenant_id}/"
     ).get("Contents", [])
     live_objects = {str(item["Key"]) for item in remaining}
-    assert object_key not in live_objects, "the payload body outlived its retention"
+    survivors = object_keys & live_objects
+    assert not survivors, f"payload bodies outlived their retention: {sorted(survivors)}"
 
     with pg_pool().connection() as conn:
         dangling_batches = conn.execute(
