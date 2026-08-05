@@ -174,25 +174,62 @@ TAMPERS = {
     "cross-tenant-splice": _splice,
 }
 
+#: Where the chain must first stop verifying, by POSITION.
+#:
+#: Position rather than event_id, because a duplicated event shares its id with
+#: the original: comparing ids cannot say which copy was reported, and for the
+#: duplicate case the original at index 2 is still perfectly valid. Asserting
+#: the id there passed by coincidence and would have kept passing if the
+#: verifier had reported the wrong record.
+FIRST_DIVERGENCE = {
+    "mutate": 2, "remove": 2, "reorder": 2,
+    "insert": 2, "cross-tenant-splice": 2,
+    "duplicate": 3,
+}
+
+
+def first_divergent_index(events: list[dict]) -> int | None:
+    """The position at which the chain first stops verifying.
+
+    Grows the prefix until verification fails, which names the position
+    unambiguously without the verifier having to report one.
+    """
+    for length in range(1, len(events) + 1):
+        valid, _ = verify_chain(events[:length])
+        if not valid:
+            return length - 1
+    return None
+
 
 @requires_stack
 @pytest.mark.parametrize("name", sorted(TAMPERS))
 def test_the_service_verifier_fails_at_the_first_divergence(name, two_chains) -> None:
+    """`verify_chain` has exactly two checks: the self-hash and the prev_hash
+    link. It does not look at chain_seq or tenant_id - those belong to the
+    exported-bundle format and are the standalone verifier's job.
+
+    So the six classes below do not exercise six mechanisms here; mutate is
+    caught by the hash and the other five by the link. That is worth saying
+    plainly rather than leaving the parametrisation to imply otherwise. What
+    this proves is that every class IS detected and detected at the right
+    position, which is what a responder needs: where the record stops being
+    trustworthy.
+    """
     victim, other = two_chains
     clean = canonical_events(victim)
     assert len(clean) == CHAIN_LENGTH, "the chain under test was not built"
     valid, divergent = verify_chain(clean)
     assert valid and divergent is None, "the untampered chain does not verify"
+    assert first_divergent_index(clean) is None
 
     foreign = canonical_events(other)[0]
     tampered = TAMPERS[name](copy.deepcopy(clean), foreign)
 
-    valid, divergent = verify_chain(tampered)
+    valid, _divergent = verify_chain(tampered)
     assert valid is False, f"{name} was not detected"
-    # First divergence, not merely some failure: a verifier that reports the
-    # last event cannot tell a responder where the record stops being trustworthy.
-    assert divergent == tampered[2]["event_id"], (
-        f"{name} reported divergence at {divergent}, expected index 2"
+    assert first_divergent_index(tampered) == FIRST_DIVERGENCE[name], (
+        f"{name} diverged at {first_divergent_index(tampered)}, "
+        f"expected {FIRST_DIVERGENCE[name]}"
     )
 
 
@@ -253,7 +290,16 @@ def _export(tenant_id: str) -> tuple[list[dict], str]:
     )
     assert exported.status_code == 200, exported.text[:200]
     records = [json.loads(line) for line in exported.text.splitlines()]
-    return records, str(records[-1]["anchor"]["head_hash"])
+
+    # The trusted hash comes from chain_heads, never from the bundle. Reading it
+    # out of the exported footer would hand the verifier a value the attacker
+    # edits along with the events, and --anchor-hash exists precisely to be the
+    # one input they do not control. The footer is checked against it instead.
+    trusted = str(head[0])
+    assert str(records[-1]["anchor"]["head_hash"]) == trusted, (
+        "the exported footer disagrees with the recorded head"
+    )
+    return records, trusted
 
 
 def _write(path: Path, records: list[dict]) -> Path:

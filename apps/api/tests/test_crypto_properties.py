@@ -76,8 +76,16 @@ def test_every_seal_uses_a_fresh_key_and_a_fresh_nonce() -> None:
 
     assert len({s.data_nonce for s in sealed}) == len(sealed), "a data nonce repeated"
     assert len({s.key_nonce for s in sealed}) == len(sealed), "a key nonce repeated"
-    assert len({s.wrapped_key for s in sealed}) == len(sealed), "a data key repeated"
-    # Identical plaintext must not produce identical ciphertext.
+
+    # Unwrapped, not compared as ciphertext. wrap_key uses a fresh key_nonce
+    # every time, so two identical data keys still produce different
+    # wrapped_key bytes - comparing those would pass under precisely the
+    # regression this line claims to catch.
+    keys = {unwrap_key(s.wrapped_key, s.key_nonce, s.master_key_id) for s in sealed}
+    assert len(keys) == len(sealed), "a data key repeated"
+
+    # Identical plaintext must not produce identical ciphertext. This follows
+    # from the nonce being fresh and is not evidence about the key.
     assert len({s.ciphertext for s in sealed}) == len(sealed), "the ciphertext is deterministic"
     for s in sealed:
         assert len(s.data_nonce) == NONCE_BYTES
