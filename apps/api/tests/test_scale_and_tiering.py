@@ -373,3 +373,76 @@ def test_tiering_does_not_postpone_erasure(tenant, monkeypatch) -> None:
     assert segments is not None and int(segments[0]) == 0, (
         "the wrapped data keys survived the object they decrypt"
     )
+
+
+@requires_stack
+def test_retention_leaves_no_orphaned_keys_or_objects(tenant) -> None:
+    """After erasure, nothing may point at something that is gone (SP-7).
+
+    Two orphan directions, and only one of them is harmless.
+
+    A payload object with no wrapped key left is fine - that is exactly what
+    crypto-shredding produces, and the ciphertext is unreadable forever. A batch
+    or segment row pointing at an object that no longer exists is NOT fine: the
+    key survives its data, and replay follows that row into a 404 mid-incident,
+    which is the moment a responder can least afford it.
+
+    Both directions are checked, because asserting only "the object is gone"
+    would pass with every key row still sitting in Postgres.
+    """
+    from abx_api.retention import run_retention
+    from abx_api.store import s3_client
+
+    tenant_id, _ = tenant
+    session_id = f"orphan-{uuid.uuid4()}"
+    ingest_events(tenant_id, [an_event(session_id)])
+
+    with pg_pool().connection() as conn:
+        before = conn.execute(
+            "SELECT b.object_key, count(s.payload_ref) FROM payload_batches b "
+            "LEFT JOIN payload_segments s ON s.batch_id = b.id "
+            "WHERE b.tenant_id=%s GROUP BY b.object_key", (tenant_id,),
+        ).fetchall()
+    assert before and int(before[0][1]) >= 1, "no batch or key was written to erase"
+    object_key = str(before[0][0])
+
+    # Expire everything for this tenant.
+    with pg_pool().connection() as conn:
+        conn.execute(
+            "INSERT INTO tenant_settings (tenant_id,retention_days,capture_payloads) "
+            "VALUES (%s,1,TRUE) ON CONFLICT (tenant_id) DO UPDATE SET retention_days=1",
+            (tenant_id,),
+        )
+        conn.execute(
+            "UPDATE payload_batches SET created_at = now() - interval '30 days' "
+            "WHERE tenant_id=%s", (tenant_id,),
+        )
+    assert run_retention() >= 1
+
+    remaining = s3_client().list_objects_v2(
+        Bucket=settings.payload_bucket, Prefix=f"{tenant_id}/"
+    ).get("Contents", [])
+    live_objects = {str(item["Key"]) for item in remaining}
+    assert object_key not in live_objects, "the payload body outlived its retention"
+
+    with pg_pool().connection() as conn:
+        dangling_batches = conn.execute(
+            "SELECT object_key FROM payload_batches WHERE tenant_id=%s", (tenant_id,)
+        ).fetchall()
+        dangling_keys = conn.execute(
+            "SELECT count(*) FROM payload_segments s JOIN payload_batches b "
+            "ON b.id = s.batch_id WHERE b.tenant_id=%s", (tenant_id,),
+        ).fetchone()
+    for (key,) in dangling_batches:
+        assert str(key) in live_objects, f"a batch row points at a deleted object: {key}"
+    assert dangling_keys is not None and int(dangling_keys[0]) == 0, (
+        "wrapped data keys survived the objects they decrypt"
+    )
+
+    # And the events themselves are still there: retention deletes bodies, not
+    # the record. A test that erased everything would pass the assertions above
+    # while destroying the evidence they exist to protect.
+    surviving = session_events(tenant_id, session_id)
+    assert surviving, "retention removed the events, not just the payload bodies"
+    valid, divergent = verify_chain(surviving)
+    assert valid and divergent is None, "the chain broke when payloads were erased"
