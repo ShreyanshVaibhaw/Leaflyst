@@ -26,6 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here needs the token after checkout, and leaving it
+          # in .git/config hands every command that follows a credential.
+          persist-credentials: false
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.12"
@@ -73,6 +77,10 @@ jobs:
         working-directory: apps/web
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here needs the token after checkout, and leaving it
+          # in .git/config hands every command that follows a credential.
+          persist-credentials: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 10
@@ -106,6 +114,7 @@ jobs:
           # Secret scanning is worthless against the tip alone: a credential
           # that was committed and then deleted is still published.
           fetch-depth: 0
+          persist-credentials: false
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.12"
@@ -129,6 +138,10 @@ jobs:
     needs: [python, web]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here needs the token after checkout, and leaving it
+          # in .git/config hands every command that follows a credential.
+          persist-credentials: false
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - name: Build Python release image
         run: docker build --build-arg GIT_COMMIT="$GITHUB_SHA" -f infra/docker/python.Dockerfile -t leaflyst-python:release-smoke .
@@ -226,6 +239,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job executes checked-out code. Leaving the token in
+          # .git/config gives that code a credential it never needs.
+          persist-credentials: false
       - uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
         with:
           python-version: "3.12"
@@ -239,16 +256,29 @@ jobs:
         with:
           node-version: 24
 
+      # Every probe below demands the SPECIFIC rejection it planted, never
+      # merely a non-zero exit. A tool that fails to start, cannot reach Docker,
+      # or rejects for an unrelated reason also exits non-zero, and a probe that
+      # accepts any failure as success is the same defect it exists to catch.
+      #
+      # Not hypothetical: the first run of this job failed because codegen could
+      # not find pnpm. That surfaced only because the drift probe asserts the
+      # check PASSES before breaking it - one line later and the probe would
+      # have reported the gate as working.
       - name: A vulnerable dependency must fail the audit
         run: |
           # requests 2.19.1 carries CVE-2018-18074. Pinned rather than latest so
           # this step does not start passing when an advisory is withdrawn.
           echo "requests==2.19.1" > /tmp/vulnerable-requirements.txt
           if uv run --with pip-audit pip-audit -r /tmp/vulnerable-requirements.txt \
-              --progress-spinner off; then
+              --progress-spinner off > /tmp/probe-audit.log 2>&1; then
             echo "pip-audit accepted a known-vulnerable pin; the audit gate is not working" >&2
             exit 1
           fi
+          grep -q "known vulnerabilities" /tmp/probe-audit.log \
+            && grep -q "requests" /tmp/probe-audit.log \
+            || { echo "pip-audit failed, but not by reporting the planted pin:" >&2
+                 cat /tmp/probe-audit.log >&2; exit 1; }
 
       - name: A leaked credential must fail the secret scan
         run: |
@@ -267,10 +297,13 @@ jobs:
           printf 'token = "ghp_%s"\n' "$body" > /tmp/leak-probe/config.py
           if docker run --rm -v /tmp/leak-probe:/probe -v "$PWD/.gitleaks.toml:/config.toml" \
               zricethezav/gitleaks:v8.21.2 detect --source /probe --config /config.toml \
-              --no-git --redact --no-banner --exit-code 1; then
+              --no-git --redact --no-banner --exit-code 1 > /tmp/probe-leak.log 2>&1; then
             echo "gitleaks accepted a planted token; the secret gate is not working" >&2
             exit 1
           fi
+          grep -q "leaks found" /tmp/probe-leak.log \
+            || { echo "gitleaks failed, but not by finding the planted token:" >&2
+                 cat /tmp/probe-leak.log >&2; exit 1; }
 
       - name: A misconfigured container must fail the infrastructure scan
         run: |
@@ -282,10 +315,14 @@ jobs:
           # proving nothing.
           printf 'FROM alpine:latest\nRUN apk add --no-cache curl\n' > /tmp/iac-probe/Dockerfile
           if docker run --rm -v /tmp/iac-probe:/probe aquasec/trivy:0.58.1 config \
-              --quiet --severity MEDIUM,HIGH,CRITICAL --exit-code 1 /probe; then
-            echo "trivy accepted a root-user latest-tag image; the IaC gate is not working" >&2
+              --severity MEDIUM,HIGH,CRITICAL --exit-code 1 /probe > /tmp/probe-iac.log 2>&1; then
+            echo "trivy accepted an unpinned root image; the IaC gate is not working" >&2
             exit 1
           fi
+          grep -q "AVD-DS-0001" /tmp/probe-iac.log \
+            && grep -q "AVD-DS-0002" /tmp/probe-iac.log \
+            || { echo "trivy failed, but not by reporting the planted checks:" >&2
+                 cat /tmp/probe-iac.log >&2; exit 1; }
 
       - name: Schema drift must fail the codegen check
         run: |
@@ -299,11 +336,15 @@ jobs:
           generated=packages/schemas/src/abx_schemas/generated/event.py
           test -f "$generated" || { echo "no generated file found to drift" >&2; exit 1; }
           printf '\n# drift introduced by the negative-control step\n' >> "$generated"
-          if uv run python packages/schemas/scripts/codegen.py --check; then
+          if uv run python packages/schemas/scripts/codegen.py --check > /tmp/probe-drift.log 2>&1; then
+            git checkout -- "$generated"
             echo "codegen --check accepted a drifted artifact; the drift gate is not working" >&2
             exit 1
           fi
           git checkout -- "$generated"
+          grep -q "DRIFT" /tmp/probe-drift.log \
+            || { echo "codegen failed, but not by reporting drift:" >&2
+                 cat /tmp/probe-drift.log >&2; exit 1; }
 
       - name: A silently skipped integration suite must fail the tests
         run: |
@@ -311,7 +352,11 @@ jobs:
           # The data stack is deliberately NOT started. Without ABX_REQUIRE_STACK
           # every integration test skips and the run is green, which is how 173
           # tests once passed by not running.
-          if ABX_REQUIRE_STACK=1 uv run pytest apps/api/tests/test_ingest_e2e.py -q; then
+          if ABX_REQUIRE_STACK=1 uv run pytest apps/api/tests/test_ingest_e2e.py -q \
+              > /tmp/probe-skip.log 2>&1; then
             echo "the suite passed with no data stack; the skip gate is not working" >&2
             exit 1
           fi
+          grep -q "ABX_REQUIRE_STACK is set but the data stack is unreachable" /tmp/probe-skip.log \
+            || { echo "pytest failed, but not by refusing to skip silently:" >&2
+                 cat /tmp/probe-skip.log >&2; exit 1; }
